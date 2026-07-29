@@ -1,0 +1,302 @@
+[
+  {
+    "id": "war_battery_range_01",
+    "email": "I have a 2023 Aurora EV (VIN 1HGBH41JXMN109186) bought in March 2024. In the last two months the indicated range on a full charge dropped from about 290 miles to roughly 245 miles, and I'm only at 18,600 miles. Mostly San Francisco, no extreme weather. I'm not asking for a replacement battery - I just want to know whether this falls under the 8-year battery warranty. Please reply within a couple of days. Thanks, Sarah.",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": true,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": ["BATTERY-NA-2024"],
+    "notes": "Battery capacity concern, no safety hazard, customer proactively disclaims replacement request."
+  },
+  {
+    "id": "war_powertrain_noise_02",
+    "email": "Hi, there's a grinding noise from the rear powertrain on my 2022 Aurora EV when I start from a stop. It's been 2 weeks and getting louder. Mileage ~44000. Still under powertrain warranty I think. What do I do? VIN is 5YJ3E1EA7KF000123. --Mike",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P1",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": true,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": ["WARRANTY-NA-2024"],
+    "notes": "Active driveline issue progressing in 2 weeks; warn-tone; powertrain coverage in question."
+  },
+  {
+    "id": "war_brake_safety_p0_03",
+    "email": "URGENT. My 2024 Aurora EV brakes are intermittently failing on cold mornings. Took it to the dealer who said come back next week. I will not drive my family in this car until someone from your side contacts me. If this isn't addressed in 24 hours my lawyer will be cc'd. VIN 7SAYGDEE0PF000456. --Robert",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P0",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": true,
+      "requires_warranty_lookup": true,
+      "red_flags": ["lawyer_letter", "safety_incident"]
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "P0: lawyer threat + safety incident. Should escalate immediately, do NOT auto-draft."
+  },
+  {
+    "id": "war_usa_duplicate_04",
+    "email": "Sent an email last Tuesday about my 2021 Aurora EV charge port not latching. Ticket #45678. No reply yet. Wondering if you saw it. --Joan",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": true,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Follow-up on existing ticket; check escalation status before drafting reply."
+  },
+  {
+    "id": "comp_charging_stuck_05",
+    "email": "This is the third time I've written about my home charger not releasing the cable on my 2024 Aurora EV. The cable gets stuck, your service team keeps telling me to wiggle it. At this point I want a refund of the home charger I bought from you in February. Order #CHG-2024-9981. --Priya",
+    "truth": {
+      "intent": "complaint",
+      "urgency": "P1",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Out-of-warranty accessory complaint; customer escalating tone; P1 because of repeated non-resolution."
+  },
+  {
+    "id": "comp_service_quality_06",
+    "email": "Took my 2023 Aurora EV to BayArea Auto Group for a 30k inspection. They scratched the front bumper and won't acknowledge it. I want this fixed. Photos attached. --Carla",
+    "truth": {
+      "intent": "complaint",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Dealer-customer dispute; not warranty-eligible until dealer-side claim resolves."
+  },
+  {
+    "id": "comp_lawyer_threat_07",
+    "email": "Forwarding my attorney's letter regarding the 2023 Aurora EV my mother purchased. Her airbag deployed in a low-speed fender bender last month. We are pursuing a defect claim. Please direct all correspondence to my attorney: Smith & Associates, file 9981-X. Regards, --Howard (son)",
+    "truth": {
+      "intent": "complaint",
+      "urgency": "P0",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": true,
+      "requires_warranty_lookup": false,
+      "red_flags": ["lawyer_letter", "safety_incident", "litigation_threat"]
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Definite lawyer route + safety; must escalate, do NOT draft."
+  },
+  {
+    "id": "recall_passive_inquiry_08",
+    "email": "Got a postcard from you guys about an airbag inspection on my 2024 Aurora EV. Is this recall related to the battery, or do I really need to come in? VIN is 5YJ3E1EA7RF111222. --Diana",
+    "truth": {
+      "intent": "recall",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": true,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Customer acknowledging a recall notice; needs recall-scope explanation, not a draft."
+  },
+  {
+    "id": "recall_safety_p0_09",
+    "email": "Saw the news about the Aurora EV battery recall this morning. Is my 2024 VIN 7SAYGDEE0RF444555 affected? I'm not driving it until I hear from you. --Tom",
+    "truth": {
+      "intent": "recall",
+      "urgency": "P0",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": true,
+      "requires_warranty_lookup": false,
+      "red_flags": ["safety_incident", "social_media_threat"]
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Customer primed by media; potential safety issue + public visibility → P0."
+  },
+  {
+    "id": "svc_oil_change_10",
+    "email": "Need to book the 45k service on my 2022 Aurora EV. Prefer Saturday morning at the Brooklyn dealer. Can you confirm a slot? --Jordan",
+    "truth": {
+      "intent": "service_booking",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Pure booking request; P3 low priority."
+  },
+  {
+    "id": "svc_collision_inspection_11",
+    "email": "I was rear-ended last week and my 2024 Aurora EV was towed to your Pittsburgh dealer for a structural inspection. They said they'd call me back by Friday. It's Saturday. What now? VIN 5YJ3E1EA7RF666777. --Lena",
+    "truth": {
+      "intent": "service_booking",
+      "urgency": "P1",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Collision repair follow-up; customer waiting on dealer and frustrated."
+  },
+  {
+    "id": "svc_recall_service_12",
+    "email": "I want to schedule the recall inspection from the postcard AND a tire rotation at the same time. 2023 Aurora EV, VIN 1HGBH41JXMN109186. San Francisco dealer if possible. --Sarah",
+    "truth": {
+      "intent": "service_booking",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": true,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Combine recall + service; one of our test customers."
+  },
+  {
+    "id": "parts_wiper_blades_13",
+    "email": "What is the part number for the rear wiper blade on a 2023 Aurora EV? Is it the same as the 2022 model? --Henry",
+    "truth": {
+      "intent": "parts_inquiry",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Pure part info request; no urgency."
+  },
+  {
+    "id": "parts_battery_thermal_14",
+    "email": "Where can I buy the OEM battery thermal sensor for my 2021 Aurora EV? Non-OEM options? --Mason",
+    "truth": {
+      "intent": "parts_inquiry",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Generic parts question; OEM vs aftermarket angle."
+  },
+  {
+    "id": "parts_tow_hitch_15",
+    "email": "Do you make a tow hitch for the 2024 Aurora EV? What's the tongue rating, and is it compatible with a 2-inch ball? --Avery",
+    "truth": {
+      "intent": "parts_inquiry",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Specific aftermarket/accessory question."
+  },
+  {
+    "id": "war_ev_charger_door_16",
+    "email": "Hi, my 2022 Aurora EV charge port door won't close fully after a few weeks. Latch feels loose. Mileage 38000, in warranty I hope. --Joan",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": true,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Charge port / latching issue (matches Joan's earlier thread in war_usa_duplicate_04)."
+  },
+  {
+    "id": "other_pr_marketing_17",
+    "email": "Saw your ad for end-of-year financing on the 2025 Aurora EV. Can you send me the brochure? --Casey",
+    "truth": {
+      "intent": "other",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Sales / marketing — not in our after-sales scope; should route to sales, not draft."
+  },
+  {
+    "id": "other_press_inquiry_18",
+    "email": "Hi, I'm a reporter at AutoWeek magazine working on a feature about EV battery warranties in cold climates. Could your PR team spare 20 minutes next week for an interview? Best, Lena Park, AutoWeek",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": ["media_cc"]
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Press — should route to PR; auto-drafting not appropriate."
+  },
+  {
+    "id": "other_general_feedback_19",
+    "email": "Just wanted to say I love my 2024 Aurora EV. Best car I've owned. Keep it up. --Reggie",
+    "truth": {
+      "intent": "other",
+      "urgency": "P3",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": [],
+    "notes": "Customer love letter; low priority; no action needed."
+  },
+  {
+    "id": "war_charging_fail_20",
+    "email": "My 2024 Aurora EV stopped charging overnight. Charger shows red light, car shows 'charging fault'. VIN 7SAYGDEE0RF123987. Mileage 4200. Under full warranty. --Yusuf",
+    "truth": {
+      "intent": "warranty_claim",
+      "urgency": "P1",
+      "region": "NA",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": true,
+      "red_flags": []
+    },
+    "expected_cited_doc_ids": ["BATTERY-NA-2024"],
+    "notes": "Recent 2024 model, charging fault. Battery / powertrain coverage; warrantability check needed fast but no safety threat."
+  }
+]

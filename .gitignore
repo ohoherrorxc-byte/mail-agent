@@ -5,10 +5,12 @@ __pycache__/
 .venv/
 venv/
 
-# secrets / runtime config
+# secrets / runtime config — never commit
 .env
-.env.local
-.env.example
+.env.*
+*.env
+env
+env.*
 *.local.json
 
 # logs
@@ -25,3 +27,7 @@ eval/runs/
 售后邮件台账*
 *台账*
 samples_real_seed.json
+
+# local file library — bulk xls/pdf exports, never commit
+文件库/
+文件库/*

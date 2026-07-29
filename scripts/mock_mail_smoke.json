@@ -1,0 +1,26 @@
+[
+  {
+    "subject": "iSMART app — cannot bind vehicle (QR code not showing)",
+    "sender": "user_001@example.com",
+    "received_at": "2026-07-22T09:00:00Z",
+    "body_text": "Hi team, I just bought a used 2024 Aurora EV and the previous owner's account is still bound. I tried scanning the QR code under Add Vehicle but nothing shows on the infotainment screen. Privacy Policy is accepted and date/time/time zone are correct. How do I force unbind and bind it to my account?"
+  },
+  {
+    "subject": "Data plan question",
+    "sender": "user_002@example.com",
+    "received_at": "2026-07-22T09:05:00Z",
+    "body_text": "Hello, my 3-year free data plan on the iSMART small tier seems to have reverted. Can you tell me how to upgrade to the medium tier? I can't find the option under Account, Plan."
+  },
+  {
+    "subject": "URGENT — keys locked inside vehicle",
+    "sender": "user_003@example.com",
+    "received_at": "2026-07-22T09:10:00Z",
+    "body_text": "My digital key won't connect and my physical key is locked inside the car. I'm stuck in a parking lot in Toronto. What do I do? Very urgent please."
+  },
+  {
+    "subject": "Going to take this to media",
+    "sender": "angry_user@example.com",
+    "received_at": "2026-07-22T09:15:00Z",
+    "body_text": "This is the third time I've contacted you about my broken infotainment and nobody has responded. I will be contacting my lawyer and going public on social media if this isn't resolved by end of week."
+  }
+]

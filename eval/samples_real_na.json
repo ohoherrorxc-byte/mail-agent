@@ -1,0 +1,92 @@
+[
+  {
+    "id": "real_na_01",
+    "email": "Dear iSmart service team,\n\nI hope this message finds you well.\n\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSmart App:\n• Country/Region: United States\n• Brand: MG\n• Vehicle Model: MG4 Electric\n• Vehicle Identification Number: VIN_MASK_na01\n• Issue Type: My Vehicle\n• Description of Issues: I cannot bind the car to my iSmart app. The QR code is not displaying when I tap Add Vehicle.\n\nI consent to the data processing for troubleshooting.\n\nBest regards,\nSarah Johnson",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "North America",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "synthetic NA — app_binding",
+      "source": "synthesized for v6_full NA gate"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "real_na_02",
+    "email": "Hello,\n\nCountry: USA\nBrand: MG\nVehicle: MG ZS EV\nVIN: VIN_MASK_na02\n\nMy car shows stale data in the iSmart app — the range and location haven't updated for 3 days. The car is otherwise working fine.\n\nThanks,\nMike",
+    "truth": {
+      "intent": "app_vehicle_control",
+      "urgency": "P2",
+      "region": "North America",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "synthetic NA — app_vehicle_control stale data",
+      "source": "synthesized for v6_full NA gate"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "real_na_03",
+    "email": "Dear iSmart team,\n\n• Country: USA\n• Vehicle: MG4 Electric\n• VIN: VIN_MASK_na03\n• Description: I locked my keys in the boot of my brand new MG4. Is there any way to use the digital key to unlock?\n\nI haven't set up the iSmart app yet.\n\nThanks,\nJames",
+    "truth": {
+      "intent": "ismart_digital_key",
+      "urgency": "P1",
+      "region": "North America",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "synthetic NA — ismart_digital_key locked out",
+      "source": "synthesized for v6_full NA gate"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "real_na_04",
+    "email": "Hi,\n\nMy 3-year data plan expired and I'm back on the small tier. How do I upgrade to the large tier? I can't find the option anywhere in the app.\n\nCountry: USA\nVIN: VIN_MASK_na04\nVehicle: MG ZS EV\n\nThanks,\nEmily",
+    "truth": {
+      "intent": "ismart_data_plan",
+      "urgency": "P3",
+      "region": "North America",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "synthetic NA — ismart_data_plan upgrade how-to",
+      "source": "synthesized for v6_full NA gate"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "real_na_05",
+    "email": "Hello,\n\nHow do I add my spouse as a secondary account? I don't want to re-bind the car, just let her have app access too.\n\nCountry: USA\nVehicle: MG5 Electric\nVIN: VIN_MASK_na05\n\nThanks,\nDavid",
+    "truth": {
+      "intent": "ismart_account_inquiry",
+      "urgency": "P3",
+      "region": "North America",
+      "language": "en",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "synthetic NA — ismart_account_inquiry secondary account",
+      "source": "synthesized for v6_full NA gate"
+    },
+    "expected_cited_doc_ids": []
+  }
+]

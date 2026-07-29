@@ -1,0 +1,14 @@
+# M1 PoC 阶段最小依赖
+openai>=1.50.0             # Azure OpenAI 客户端 + Structured Outputs (json_schema strict) + Function Calling
+pydantic>=2.6.0           # TriageResult / RetrievalResult / ComplianceResult / DraftReply schema
+python-dotenv>=1.0.0      # 加载 .env
+tiktoken>=0.7.0           # 用 o200k_base 做 token 预算校验
+openpyxl>=3.1.0           # 读 iSMART售后服务邮箱回复方法_20260308.xlsx 模板表
+msal>=1.25.0              # Microsoft Graph 认证（outlook_drafts.py）
+requests>=2.31.0          # Graph API HTTP 客户端
+
+# 后续 M2/M3 才接：
+# qdrant-client>=1.7.0      # mcp-rag
+# fastapi>=0.110            # 工作台后端
+# uvicorn[standard]>=0.27
+# celery[redis]>=5.3        # IMAP 拉取 / 重试队列
