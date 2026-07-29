@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# secrets / runtime config
+.env
+.env.local
+.env.example
+*.local.json
+
+# logs
+*.log
+logs/
+
+# evaluation outputs (large)
+eval/runs/
+*.out
+
+# customer PII — never commit raw email ledgers / exports
+*.csv
+*.tsv
+售后邮件台账*
+*台账*
+samples_real_seed.json
