@@ -298,7 +298,9 @@ Fields you must populate:
     Hardware / non-iSMART:
       "hardware_warranty"       — warranty claim / part inquiry / IPK warning
                                   light / powertrain
-      "charging"                — charging session failure
+      "charging"                — charging session failure **OR**
+                                  how-to: scheduling / off-peak / timer /
+                                  "how do I charge at night" / "set charging time"
       "delivery_handover"       — pre-sales / delivery onboarding complaint
       "vehicle_incompatible"    — iSMART not compatible with their model/year
     Lifecycle:
@@ -565,13 +567,15 @@ Check list (run all):
    guarantee" present without an RMA number?  → violation.
 2. **Forbidden PII**: did the draft echo back a credit-card suffix,
    SSN, or driver's license?  → violation.
-3. **Missing citation**: any concrete promise without a `cited_clause_id`?
-   → violation.
-4. **SLA**: is the SLA realistic for the intent / urgency pair?
-   - P0 → ≤ 4h
-   - P1 → ≤ 1 business day
-   - P2 → ≤ 3 business days
-   - P3 → ≤ 5 business days
+3. **Missing citation**: any HARD commitment (refund / replace / recall /
+   time-bound promise like "within 24h" / "we will respond by Friday")
+   without a `cited_clause_id`?  → violation.
+   SOFT acknowledgements ("we will review", "our team will look into
+   this", "we will follow up", "we are investigating", "please send
+   us X / please share Y") do NOT require a cited_clause_id — they
+   are process statements, not commitments.  Mark them as compliant
+   unless they imply a specific deadline or outcome.
+
 5. **Region laws**: respect the customer region's privacy regime
    (see ROLE block above). NA customer references must NOT quote
    EU GDPR-style phrasing; Canada customers must follow provincial

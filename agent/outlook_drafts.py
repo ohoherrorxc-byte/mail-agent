@@ -655,6 +655,105 @@ def build_router_from_env() -> MailboxRouter:
 SKIP_INTENTS = set()                # 显式禁止的 intent
 DEFAULT_INTENT_ALLOWLIST: Optional[set[str]] = None   # None = 不限
 
+
+# ── M2.5.4: 重复邮件检测（去重）────────────────────────────────────────
+# 同一客户重复追问同一件事 → 只保留 1 条起草，剩下的 tag 关闭:无效邮件
+# 设计：
+#   - 进程内 LRU 缓存（OrderedDict，上限 500 条，超出 FIFO）
+#   - fingerprint = subject normalize（去 Re:/Fwd: 前缀 + lowercase） +
+#                    body 前 200 字的 char 3-gram Jaccard
+#   - 阈值：默认 0.85；同 sender 命中 → 视为重复
+#   - 不调 embedding API（省钱；M1 PoC 阶段够用；阈值可调）
+#   - **本轮不调 Graph PATCH**：检测到重复后只 skip 起草 + 写 record，
+#     打 Outlook category "关闭:无效邮件" 留给 M2 PATCH guard 放行后做。
+#
+# 已知局限：
+#   - 跨进程不生效（每次 outlook_drafts 启动都重置缓存）
+#   - 多语言 / 短邮件容易漏判 / 误判
+#   - 真生产应换成 embedding + vector DB；本轮 PoC 先用字符 n-gram 跑通
+
+import re as _re
+from collections import OrderedDict
+
+DEDUP_NGRAM_SIZE      = 3
+DEDUP_JACCARD_THRESHOLD = 0.70    # body jaccard 阈值（中文客服"重发"语序略变
+                                    # 但 70%+ 文本相同算重复）
+DEDUP_SUBJ_SUBSTR_MIN   = 8        # 主题 normalize 后互相包含的最小长度
+DEDUP_BODY_CHARS       = 200
+DEDUP_CACHE_MAX        = 500
+
+# 主题前缀：去掉这些再算 fingerprint（"Re: App not working" 跟原主题算相似）
+_RE_FWD_RE = _re.compile(r"^\s*(?:re|fwd|fw)\s*:\s*", _re.IGNORECASE)
+
+
+def _dedup_fingerprint(mail: Mail) -> tuple[str, frozenset[str]]:
+    """mail → (normalized_subject, body 3-gram 集合)。"""
+    subj = _RE_FWD_RE.sub("", mail.subject or "").strip().lower()
+    body = (mail.body_text or "")[:DEDUP_BODY_CHARS].lower()
+    ngrams: set[str] = set()
+    if len(body) >= DEDUP_NGRAM_SIZE:
+        for i in range(len(body) - DEDUP_NGRAM_SIZE + 1):
+            ngrams.add(body[i:i + DEDUP_NGRAM_SIZE])
+    return subj, frozenset(ngrams)
+
+
+def _dedup_jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    if not a and not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+class _DuplicateDetector:
+    """进程内 LRU：同 sender + 主题相似 + body jaccard > 阈值 → 视为重复。
+
+    命中时返回 dict {duplicate_of: mail_id, score: float}；
+    不命中返回 None 并把当前邮件指纹入缓存。
+    """
+
+    def __init__(self, threshold: float = DEDUP_JACCARD_THRESHOLD,
+                 max_size: int = DEDUP_CACHE_MAX):
+        self.threshold = threshold
+        self.max_size  = max_size
+        # 按 sender 分桶，避免不同客户被误判重复
+        self._buckets: dict[str, "OrderedDict[str, tuple[str, frozenset[str]]]"] = {}
+
+    def check_and_record(self, mail: Mail) -> Optional[dict]:
+        subj, ngrams = _dedup_fingerprint(mail)
+        sender_key = (mail.sender or "").lower()
+        bucket = self._buckets.get(sender_key)
+        if bucket is None:
+            bucket = OrderedDict()
+            self._buckets[sender_key] = bucket
+        for existing_id, (existing_subj, existing_ngrams) in bucket.items():
+            # 主题 normalize 后相等 → 100% 算重复
+            if subj and subj == existing_subj:
+                bucket.move_to_end(existing_id)
+                return {"duplicate_of": existing_id, "score": 1.0,
+                        "match": "subject_exact"}
+            # 主题互相包含（≥ 8 字符子串）—— 客户加 Re:/Fwd: 时常见
+            if (subj and existing_subj and len(subj) >= DEDUP_SUBJ_SUBSTR_MIN
+                    and len(existing_subj) >= DEDUP_SUBJ_SUBSTR_MIN
+                    and (subj in existing_subj or existing_subj in subj)):
+                score = _dedup_jaccard(ngrams, existing_ngrams)
+                if score >= self.threshold * 0.6:   # 主题高度相关时 body 阈值放宽
+                    bucket.move_to_end(existing_id)
+                    return {"duplicate_of": existing_id, "score": score,
+                            "match": "subject_contains"}
+            # 主题不相似 → body jaccard > 阈值
+            score = _dedup_jaccard(ngrams, existing_ngrams)
+            if score >= self.threshold:
+                bucket.move_to_end(existing_id)
+                return {"duplicate_of": existing_id, "score": score,
+                        "match": "jaccard"}
+        # 不重复 → 入缓存
+        bucket[mail.id] = (subj, ngrams)
+        while len(bucket) > self.max_size:
+            bucket.popitem(last=False)
+        return None
+
+
 def should_skip(mail: Mail, triage: dict, tmpl: Optional[dict],
                 allowlist: Optional[set[str]],
                 region: str = "North America") -> Optional[str]:
@@ -789,6 +888,7 @@ def process_mail(
     dry_run: bool,
     use_llm: bool = True,
     router: Optional[MailboxRouter] = None,
+    dedup: Optional[_DuplicateDetector] = None,    # M2.5.4: 进程内去重
 ) -> dict:
     # ── 0. self-mail 跳过（最便宜，先做：省 LLM + redact）─────────────────
     # 移植自生产 MailUserServiceImpl.skipMail()：发件人是自家 mailbox /
@@ -803,6 +903,29 @@ def process_mail(
             "skipped":   "self_mail",
             "skip_reason_detail": "sender matches own mailbox or skip domain",
         }
+
+    # ── M2.5.4: 重复邮件检测（去重）──────────────────────────────────────
+    # 同一客户重复追问同一件事 → 只保留 1 条起草，剩下的 tag 关闭:无效邮件。
+    # 本轮只 skip 起草 + 写 record；打 category 留给 M2 PATCH guard 放行后做。
+    # detector 是进程内单例（main() 里 new 一次 + 透传给 process_mail）。
+    if dedup is not None:
+        dup = dedup.check_and_record(mail)
+        if dup is not None:
+            LOG.info("[SKIP→duplicate] %s — %s (of %s, score=%.2f)",
+                     mail.subject[:50], dup["match"],
+                     dup["duplicate_of"], dup["score"])
+            return {
+                "mail_id":            mail.id,
+                "subject":            mail.subject,
+                "sender":             mail.sender,
+                "skipped":            "duplicate",
+                "skip_reason_detail": (
+                    f"{dup['match']} (score={dup['score']:.2f}) of "
+                    f"mail_id={dup['duplicate_of']}"
+                ),
+                "duplicate_of":       dup["duplicate_of"],
+                "duplicate_score":    dup["score"],
+            }
 
     # ── PII redact：邮件正文 / subject / sender 一律先脱敏 ────────────────
     # 脱敏后才送 LLM、进 log、写 draft subject。
@@ -849,6 +972,10 @@ def process_mail(
         "pii_redacted": pii_counts,
         "image_descriptions_count": len(image_descs),   # M1.6: 报告用
         "skipped":    skip,
+        # M2.5.1: xlsx 第 11 列「禁止/注意表述」原文。模板正文是 xlsx 写死的，
+        # 不会触发 forbidden 短语（93/93 模板正文 0 命中）；此字段仅供审计 /
+        # 给 CS 看这个模板的边界，**不做运行时校验**。
+        "template_forbidden": result.get("template_forbidden", ""),
     }
     # M2.5: 把 auto_reply_level / required_info_group 也写到 record（审计 + 报告用）
     record["auto_reply_level"]   = result["triage"].get(
@@ -933,6 +1060,8 @@ def main() -> int:
     )
     # ── Mailbox 路由（M1.5）：从 env 读 mailbox + skip domain ─────────────
     router = build_router_from_env()
+    # ── M2.5.4: 进程内去重 detector（LRU）────────────────────────────────
+    dedup = _DuplicateDetector()
     LOG.info("mailbox router: uk=%s au=%s default=%s skip_domains=%s",
              router.uk, router.au, router.default, router._skip_domains)
 
@@ -962,6 +1091,7 @@ def main() -> int:
                     allowlist=allowlist, dry_run=True,
                     use_llm=not args.no_llm,
                     router=router,
+                    dedup=dedup,
                 )
                 records.append(rec)
             except Exception as e:
@@ -1018,6 +1148,7 @@ def main() -> int:
                 m, g, llm=llm, templates=templates,
                 allowlist=allowlist, dry_run=args.dry_run,
                 router=router,
+                dedup=dedup,
             )
             records.append(rec)
         except Exception as e:

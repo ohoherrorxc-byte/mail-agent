@@ -182,6 +182,10 @@ L2_TO_INTENT_EXTRA: dict[str, str] = {
     "新需求-FICM/App-可调充电功率": "ismart_remote_control",
     "新需求-OTA升级":          "ismart_fota",
     "新需求-Watch版App":       "app_suggestion",
+    # ── M2.5.5: 用户新增模板（CHG-SCHED-001）─────────────────────────
+    # 客户问"如何在 App 设置充电时段"——how-to，不是"建议加新功能"。
+    # 区别于 NEW-SPLIT-CHG-001（后者是需求反馈型）。
+    "App-预约充电相关":        "charging",
     # ── 新表新出现的 FICM / App 子类 ──
     "ADAS相关":                "adas_acc",  # generic ADAS → 默认 acc
     "App-地图相关":            "ficm_map",
@@ -287,6 +291,9 @@ def _load_new_schema_rows(
 
         level = _normalize_level(level_raw)
         req_groups = _parse_required_info(req_info)
+        # M2.5.4: 默认称谓 "Dear Customer," → {{salutation}}, 占位符由
+        # greeting.personalize_greeting() 在草稿生成时按发件人姓名替换
+        tmpl = _normalize_greeting_placeholder(tmpl)
 
         key = (intent, tmpl)
         if key in seen:
@@ -320,6 +327,8 @@ def _load_legacy_schema_rows(
         desc = (row[2] or "").strip()
         if not cat and not tmpl:
             continue
+        # M2.5.4: 默认称谓 → {{salutation}} 占位符（greeting 阶段替换）
+        tmpl = _normalize_greeting_placeholder(tmpl)
         tokens = [t.strip() for t in re.split(r"[,/]", cat) if t.strip()]
         for tok in tokens:
             bare = tok
@@ -345,6 +354,10 @@ def _load_legacy_schema_rows(
                     "human_trigger":  "",
                     "forbidden":      "",
                     "source":         path.name,
+                    # v4 模板第 3 列 Description 含元数据（"v4: source=cs-...;
+                    # region=...; intent=...; supporting_replies=N"）。
+                    # 旧表无第 4-11 列，原表 Description 是客服备注；都保留。
+                    "description":    desc,
                 })
                 break
 
@@ -447,6 +460,32 @@ def _keyword_classify(email_body: str) -> TriageResult:
 # 模板里 {xxx} 是占位符
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
+# 模板正文里的默认称谓 → {{salutation}} 占位符（M2.5.4）
+# xlsx 写死 "Dear Customer,"，LLM 起草时常改写为 "Dear Valued Customer," /
+# "Hi there," / "Dear John,"，原正则匹配不到会漏网替换。运行时统一改写为
+# {{salutation}} 让 greeting.personalize_greeting() 确定性兜底。
+_DEFAULT_GREETING_RE = re.compile(
+    r"(?:Dear|Hi|Hello)\s+(?:Customer|customer)\s*,",
+    re.IGNORECASE,
+)
+
+
+def _normalize_greeting_placeholder(tmpl: str) -> str:
+    """把模板正文里默认称谓 → {{salutation}} 占位符。
+
+    只改写"开头出现的"（前面允许空行 / 空白），不动正文里的合法短语。
+    没匹配到就原样返回。"""
+    if not tmpl:
+        return tmpl
+    m = _DEFAULT_GREETING_RE.search(tmpl)
+    if not m:
+        return tmpl
+    # 只在开头或前面只允许空白 / 换行
+    head = tmpl[:m.start()]
+    if head.strip():
+        return tmpl
+    return head + "{{salutation}}," + tmpl[m.end():]
+
 
 def extract_placeholders(template: str) -> list[str]:
     """从模板里抽出 {xxx} 占位符"""
@@ -523,24 +562,52 @@ def _template_sub_scenario_relevance(template: dict, sub_scenario: str) -> float
     return score
 
 
+def _template_body_token_overlap(template: dict, body_text: str) -> float:
+    """模板 body ∩ 邮件 body 的 token 数（按 [a-z]{4,} 分词）。
+
+    用作 pick_template() 的二级排序：sub_scenario 没命中时挑最相关的候选。
+    解决 charging / ismart_feature_inquiry 等多候选 intent 下，首条候选不一定是
+    客户问题对应的模板（如 CHG-001 充电失败 vs CHG-SCHED-001 预约充电教学）。
+    """
+    body_lower = (template.get("template") or "").lower()
+    if not body_lower or not body_text:
+        return 0.0
+    mail_tokens = set(re.findall(r"[a-z]{4,}", body_text.lower()))
+    if not mail_tokens:
+        return 0.0
+    return sum(1.0 for tok in mail_tokens if tok in body_lower)
+
+
 # ── 主入口 ─────────────────────────────────────────────────────────────
 
 def pick_template(triage_intent: str, templates: list[dict],
                   body_text: str = "") -> Optional[dict]:
     """按 intent 找模板；如有 sub_scenario 信号，优先选最相关的。
     优先找 intent 完全匹配的；找不到再 fallback 到 ismart_feature_inquiry。
+
+    M2.5.5: 加 body token 重叠评分 fallback —— 同 intent 多候选时
+    （如 charging 9 条），按模板 body ∩ 邮件 body 的 token 数排序，
+    解决首条候选不一定是客户问题对应的模板（如 CHG-001 vs CHG-SCHED-001）。
     """
     candidates = [t for t in templates if t["intent"] == triage_intent]
     if not candidates:
         fallback = [t for t in templates if t["intent"] == "ismart_feature_inquiry"]
         return fallback[0] if fallback else None
 
-    # 子场景打分（如识别到）
+    # 子场景打分（如识别到）—— 优先级最高
     sub = detect_sub_scenario(body_text, triage_intent)
     if sub:
         scored = [(c, _template_sub_scenario_relevance(c, sub)) for c in candidates]
         scored.sort(key=lambda x: x[1], reverse=True)
         if scored[0][1] > 0:   # 至少命中一个 keyword
+            return scored[0][0]
+
+    # M2.5.5: body token 重叠评分 fallback
+    if body_text and len(candidates) > 1:
+        scored = [(c, _template_body_token_overlap(c, body_text))
+                  for c in candidates]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        if scored[0][1] > 0:   # 至少命中一个 token（>= 4 字符）
             return scored[0][0]
 
     return candidates[0]   # 默认第一条
@@ -594,9 +661,101 @@ def run_template_reply(
         "template_doc": tmpl,
         "placeholders": placeholders,
         "filled_body":  filled,
+        # M2.5.1: 模板自带的「禁止/注意表述」原文（xlsx 第 11 列）。
+        # 仅供审计 / 给 LLM 改写时知道模板边界用 —— 模板正文是 xlsx 写死的，
+        # 不会触发 forbidden 短语（已验：93 条带 forbidden 的模板正文 0 命中）。
+        "template_forbidden":  (tmpl or {}).get("forbidden", "") or "",
         "image_descriptions": image_descriptions or [],   # 透传给 process_mail
         "sender":       sender or "",                     # M1.7: 透传给 process_mail（审计用）
     }
+
+
+# ── M2.5.1: template_forbidden post-check 工具函数 ───────────────────────
+# 用途：EmailAgent._compliance_step() 对 LLM 起草正文做 post-check。
+# 路径 B (run_template_reply) 不调 LLM 起草，模板正文是 xlsx 写死的，已避开
+# forbidden 短语（93/93 验证），所以**不**在路径 B 暴露这个 post-check。
+#
+# 算法：
+#   1. forbidden 原文 (中文「不要 X」) → _extract_action_phrases() 剥否定词抽 X
+#   2. 在 body_md 里查 X 子串 / word-boundary → 命中返回 X，否则 None
+#
+# 跟 check_forbidden_phrasings() 的区别：F1-F8 是代码写死的 8 条通用禁则；
+# template_forbidden 是 xlsx 每条模板独有的边界（94/95 非空）。
+#
+# 已知设计局限：xlsx forbidden 是中文、LLM draft 必为英文（CLAUDE.md 硬约束）。
+# 子串匹配对英文译法无能为力。本防线**仅**防 LLM 中文 hallucination 或
+# prompt injection 触发的中英混合违规，不替代 F1-F8 regex post-check。
+
+import re as _re_mod
+
+# 否定词 + 至少一个空白符 / 句首边界 —— 用 re.sub 从头剥，迭代直到剥不动。
+_NEG_TOKENS_TF = (
+    "不要", "不能", "不可", "不",
+    "never", "please do not", "don't", "do not",
+)
+
+
+def _extract_action_phrases(forbidden_text: str) -> list[str]:
+    """从 forbidden 句抽动作短语（去掉否定词后剩余的 2+ 字 token）。
+
+    三步：
+      1. 按句号/分号/逗号切分（保留多禁则）
+      2. 每段剥前缀否定词（迭代）
+      3. 全段扫一遍中段否定词
+    """
+    if not forbidden_text:
+        return []
+    s = forbidden_text.strip()
+    parts = _re_mod.split(r"[。.;;；\n，,]+", s)
+    out: list[str] = []
+    for p in parts:
+        p = p.strip().lstrip("，。,.；;：:")
+        if not p:
+            continue
+        # 迭代去前缀否定词
+        changed = True
+        while changed and p:
+            changed = False
+            pl = p.lower()
+            for tok in _NEG_TOKENS_TF:
+                if pl.startswith(tok):
+                    rest = p[len(tok):].lstrip()
+                    if rest != p:
+                        p = rest
+                        changed = True
+                    break
+        # 全段去掉任何位置的否定 token + 两侧标点
+        for tok in _NEG_TOKENS_TF:
+            p = _re_mod.sub(_re_mod.escape(tok), " ", p, flags=_re_mod.IGNORECASE)
+        p = _re_mod.sub(r"\s+", " ", p).strip().strip("，。,.；;：: ")
+        if len(p) >= 2:
+            out.append(p)
+    return out
+
+
+def _check_template_forbidden(
+    body_md: str, forbidden_text: str,
+) -> Optional[str]:
+    """body_md 命中 forbidden 句里的动作短语 → 返回命中短语；否则 None。
+
+    用途：EmailAgent._compliance_step() 对 LLM 起草正文做 post-check。
+    命中 → verdict.pass_=False + violations.append + 触发 reflection loop 改写。
+    """
+    if not body_md or not forbidden_text:
+        return None
+    phrases = _extract_action_phrases(forbidden_text)
+    if not phrases:
+        return None
+    body_lower = body_md.lower()
+    for phrase in phrases:
+        # 中文短语用子串匹配；英文 token 用 word-boundary
+        if _re_mod.search(r"[一-鿿]", phrase):
+            if phrase in body_md:
+                return phrase
+        else:
+            if _re_mod.search(rf"\b{_re_mod.escape(phrase.lower())}\b", body_lower):
+                return phrase
+    return None
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────

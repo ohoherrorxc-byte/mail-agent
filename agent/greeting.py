@@ -121,8 +121,14 @@ def build_greeting(sender: str) -> str:
 # 但 LLM 起草可能写 "Dear Customer,"（大写 C）或 "Hi customer,"。
 # 匹配不区分大小写；只替换"第一行的开头"，避免误伤正文里 "Dear customer
 # service team" 之类的合法短语。
+#
+# 占位符 {{salutation}}（M2.5.4 引入）：模板正文写死"Dear Customer,"会被 LLM
+# 起草时改写成 "Dear Valued Customer," / "Dear John," / "Hi there,"，原正则匹配
+# 不到就漏网。改成 {{salutation}} 后由本函数确定性替换，LLM 起草也会被
+# prompt 强制保留占位符。
 _GREETING_PATTERNS: tuple[str, ...] = (
     "Dear Mr./Ms. ,",          # 已替换但 last 缺失
+    "{{salutation}},",         # M2.5.4: 模板显式占位符（推荐写法）
     "Dear customer,",
     "Dear Customer,",
     "Hi customer,",

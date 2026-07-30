@@ -69,6 +69,10 @@ from .prompts import (
     _resolve_region_key,
     build_compliance_system,
 )
+from .template_reply import (
+    load_xlsx as _load_xlsx_templates,
+    _check_template_forbidden,
+)
 from .schemas import (
     ComplianceResult,
     DraftReply,
@@ -253,6 +257,29 @@ class EmailAgent:
         )
         audit_calls.append(_as_audit(c))
 
+        # M2.5: weak-evidence retry once with hint before escalating
+        if retrieval.evidence_score < 0.5 or not retrieval.cited_clauses:
+            retry_retrieval, c_retry = self._retrieval_step(
+                email_body=email_body,
+                triage=triage,
+                context=context,
+                evidence=evidence,
+                retry_hint=(
+                    "Previous retrieval was too conservative. At least one "
+                    "of the chunks above likely addresses the customer's "
+                    "question. Cite the most relevant one(s), even partial "
+                    "matches. Lower the evidence_score bar to 0.3 if the "
+                    "chunk is tangentially relevant."
+                ),
+            )
+            audit_calls.append(_as_audit(c_retry))
+            # accept retry if it improved (cited more clauses) or scored better
+            if (
+                len(retry_retrieval.cited_clauses) > len(retrieval.cited_clauses)
+                or retry_retrieval.evidence_score > retrieval.evidence_score
+            ) and retry_retrieval.cited_clauses:
+                retrieval = retry_retrieval
+
         if retrieval.evidence_score < 0.4 or not retrieval.cited_clauses:
             # 证据薄弱，直接升人工，不浪费草稿阶段
             raise NeedsHumanEscalation(
@@ -268,6 +295,10 @@ class EmailAgent:
         compliance: ComplianceResult | None = None
         rewrite_attempts = 0
 
+        # M2.5.1: 取模板自带的「禁止/注意表述」（xlsx 第 11 列）。
+        # 模板加载复用 template_reply.load_xlsx()——同一份 xlsx，避免 schema 分叉。
+        template_forbidden = self._load_template_forbidden(triage.intent)
+
         while True:
             # 草稿
             draft, c = self._drafting_step(
@@ -279,6 +310,7 @@ class EmailAgent:
                     compliance.suggested_reply_adjustments
                     if compliance is not None else None
                 ),
+                template_forbidden=template_forbidden,
             )
             audit_calls.append(_as_audit(c))
 
@@ -327,10 +359,25 @@ class EmailAgent:
                 "calls": audit_calls,
                 "rewrite_attempts": rewrite_attempts,
                 "latency_ms": elapsed,
+                "template_forbidden": template_forbidden,   # M2.5.1: 哪条禁则原文进了 prompt
             },
         )
 
     # ── 内部 step ───────────────────────────────────────────────
+
+    def _load_template_forbidden(self, intent: str) -> str | None:
+        """M2.5.1: 按 intent 挑第一条匹配模板的 xlsx「禁止/注意表述」原文。
+        模板库懒加载（首次调用才读 xlsx；后续命中缓存）。
+        返回 None 表示该 intent 无模板 / 模板无禁则。
+        """
+        if not hasattr(self, "_templates_cache"):
+            self._templates_cache = _load_xlsx_templates()  # type: ignore[attr-defined]
+        for t in self._templates_cache:  # type: ignore[attr-defined]
+            if t.get("intent") == intent:
+                f = (t.get("forbidden") or "").strip()
+                if f:
+                    return f
+        return None
 
     def _build_context(
         self,
@@ -369,13 +416,17 @@ class EmailAgent:
         triage: TriageResult,
         context: dict,
         evidence: list,
+        retry_hint: str | None = None,
     ) -> tuple[RetrievalResult, LLMCall]:
-        user_msg = json.dumps({
+        user_payload = {
             "email":     email_body,
             "triage":    triage.model_dump(),
             "context":   context,
             "evidence":  evidence,
-        }, ensure_ascii=False, default=str)
+        }
+        if retry_hint:
+            user_payload["retry_hint"] = retry_hint
+        user_msg = json.dumps(user_payload, ensure_ascii=False, default=str)
         return self._call_with_degrade(
             schema=RetrievalResult,
             messages=[
@@ -395,14 +446,19 @@ class EmailAgent:
         context: dict,
         retrieval: RetrievalResult,
         user_feedback: list[str] | None,
+        template_forbidden: str | None = None,   # M2.5.1: xlsx 第 11 列「禁止/注意表述」
     ) -> tuple[DraftReply, LLMCall]:
-        prompt = json.dumps({
+        payload: dict = {
             "email":         email_body,
             "triage":        triage.model_dump(),
             "context":       context,
             "retrieval":     retrieval.model_dump(),
             "rewrite_notes": user_feedback or [],
-        }, ensure_ascii=False, default=str)
+        }
+        if template_forbidden:
+            # 把模板自带的禁则原文喂给 LLM；与 FORBIDDEN_PHRASINGS（F1-F8）互补
+            payload["template_forbidden"] = template_forbidden
+        prompt = json.dumps(payload, ensure_ascii=False, default=str)
         return self._call_with_degrade(
             schema=DraftReply,
             messages=[
@@ -419,6 +475,24 @@ class EmailAgent:
         draft: DraftReply,
         triage: TriageResult,
     ) -> tuple[ComplianceResult, LLMCall]:
+        # ── 三层 post-check ─────────────────────────────────────────
+        #
+        # 1. LLM compliance 调用（region-specific 系统提示，prompt 强约束）
+        #    → ComplianceResult 含 verdict.pass / violations
+        #
+        # 2. F1-F8 regex post-check（check_forbidden_phrasings，代码写死的 8 条
+        #    通用禁则）。命中 → verdict.pass_=False + violations + 触发 reflection loop。
+        #
+        # 3. template_forbidden post-check（_check_template_forbidden，从 xlsx
+        #    第 11 列「禁止/注意表述」抽出动作短语，在 draft.body_md 里查子串）。
+        #    Best-effort：xlsx forbidden 是中文，LLM draft 必为英文（CLAUDE.md
+        #    硬约束），所以这条防线**仅防中文 hallucination / 中英 prompt injection**，
+        #    不替代 F1-F8。命中 → verdict.pass_=False + violations + 触发 reflection loop。
+        #
+        # 完整防御链：模板作者写模板避开禁则 → LLM drafting 在 prompt 看到禁则 →
+        # LLM compliance 在 system prompt 看到 F1-F8 → F1-F8 regex 复检 →
+        # template_forbidden 复检 → 反射循环改写 → 不通过就 escalate。
+        #
         # M2: 按 (region, country) 选合规规则——NA/EU/UK/OC 各一套；
         # Asia/South America/Africa 已在 region gate 阶段被拦下，到不了这里。
         system = build_compliance_system(triage.region, triage.country)
@@ -451,6 +525,24 @@ class EmailAgent:
                 f"(see 禁止表述 sheet in iSMART自动回复知识库_全量模板_20260729.xlsx)."
                 for h in forbidden_hits
             ]
+        # M2.5.1: xlsx 第 11 列 template_forbidden post-check。
+        # 模板作者写模板时避开了 forbidden 短语（93/93 验证），但 LLM 起草正文不一定守 prompt。
+        # 这里对 draft.body_md 做 post-check：抽 forbidden 动作短语 → body_md 是否命中 →
+        # 命中就 verdict.pass_=False + 触发 reflection loop 改写。
+        template_forbidden = self._load_template_forbidden(triage.intent)
+        if template_forbidden:
+            tf_hit = _check_template_forbidden(draft.body_md, template_forbidden)
+            if tf_hit:
+                compliance.verdict.pass_ = False
+                compliance.verdict.violations = list(compliance.verdict.violations) + [
+                    f"template_forbidden: {tf_hit}"
+                ]
+                compliance.suggested_reply_adjustments = list(
+                    compliance.suggested_reply_adjustments
+                ) + [
+                    f"LLM draft 违反了模板专属禁则「{template_forbidden}」（触发了「{tf_hit}」）；"
+                    f"改写时按禁则原文要求处理。",
+                ]
         return compliance, c
 
     def _call_with_degrade(

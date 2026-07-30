@@ -417,6 +417,536 @@ def test_v4_templates_load_via_template_reply():
     )
 
 
+# ── M2.5.1: xlsx 第 11 列「禁止/注意表述」端到端 ─────────────────────────
+
+def test_xlsx_forbidden_field_loaded_into_template_doc():
+    """M2.5.1: load_xlsx() 应把 xlsx 第 11 列读进 row['forbidden']。
+    94/95 行非空。
+    """
+    from agent.template_reply import load_xlsx
+    templates = load_xlsx()
+    assert templates, "load_xlsx() 应至少加载一条模板"
+
+    # 至少有一些模板带 forbidden 字段
+    with_forbidden = [t for t in templates if (t.get("forbidden") or "").strip()]
+    assert len(with_forbidden) >= 50, (
+        f"应至少 50 条模板带 forbidden 字段；实际 {len(with_forbidden)}"
+    )
+
+    # forbidden 字段是中文「不要 X」自由文本，不是空字符串
+    sample = with_forbidden[0]
+    fb = sample["forbidden"]
+    assert "不要" in fb or "不能" in fb or "不可" in fb, (
+        f"forbidden 字段应该是中文「不要 X」自由文本；got: {fb!r}"
+    )
+
+
+def test_template_body_never_contains_forbidden_phrase():
+    """M2.5.1: 模板作者写模板时已经避开了 forbidden 短语（93/93 验证）——
+    这是禁则字段的语义保证：禁则是给模板作者的边界提示，不是运行时校验信号。
+    """
+    from agent.template_reply import load_xlsx
+
+    templates = load_xlsx()
+    hit_count = 0
+    for t in templates:
+        fb = (t.get("forbidden") or "").strip()
+        body = t.get("template", "")
+        if not fb or not body:
+            continue
+        # 简单去否定词子串匹配：检查 body 是否含 forbidden 里「不要 X」抽出 X 的子串
+        # 实际抽词算法复杂，这里用宽口径检查：body 不应含「要求客户」「密码」「承诺」
+        # 等明显禁则触发词
+        trigger_phrases = [
+            "please send your password", "please provide your password",
+            "we will refund", "we will replace", "by tomorrow",
+            "within 24 hours", "within 48 hours",
+            "your warranty is valid", "your warranty is expired",
+            "this is not iSMART",
+        ]
+        for phrase in trigger_phrases:
+            if phrase.lower() in body.lower():
+                hit_count += 1
+                print(f"  WARNING: tmpl={t.get('template_id')} contains '{phrase}'")
+                break
+    assert hit_count == 0, (
+        f"模板正文不应含已知禁则触发短语；发现 {hit_count} 条"
+    )
+
+
+def test_run_template_reply_returns_template_forbidden():
+    """M2.5.1: run_template_reply() 返回 dict 含 template_forbidden (str)。
+    forbidden_hit 已移除 —— 模板正文是 xlsx 写死的，运行时不会触发禁则。
+    """
+    from agent.template_reply import run_template_reply
+
+    result = run_template_reply(
+        "I cannot bind my car to the app. The QR code does not show.",
+        use_llm=False,        # 走 _keyword_classify → 不调 Azure
+        templates=None,        # 触发 load_xlsx() 默认路径
+    )
+
+    assert "template_forbidden" in result, (
+        "run_template_reply 返回值应含 template_forbidden"
+    )
+    assert "forbidden_hit" not in result, (
+        "forbidden_hit 已移除（post-filter 不做运行时校验）"
+    )
+    assert isinstance(result["template_forbidden"], str)
+
+
+def test_email_agent_loads_template_forbidden_by_intent():
+    """M2.5.1: EmailAgent._load_template_forbidden(intent) 应按 intent 挑模板。
+    不调 Azure LLM（不构造完整 handle_email 链路）。
+    """
+    from agent.email_agent import EmailAgent
+
+    # 用一个 stub llm（不调 Azure）
+    class _StubLLM:
+        pass
+
+    agent = EmailAgent(llm=_StubLLM())  # type: ignore[arg-type]
+
+    # 找一个真有模板的 intent（xlsx 第 11 列 94/95 非空）
+    fb = agent._load_template_forbidden("app_binding")
+    if fb is None:
+        # app_binding 在 v2/v4 旧表才有；如果被新表覆盖后无 forbidden，跳过
+        import pytest
+        pytest.skip("app_binding intent 当前无 forbidden 字段（xlsx 覆盖差异）")
+
+    assert isinstance(fb, str) and fb.strip(), (
+        f"_load_template_forbidden 应返回非空字符串；got {fb!r}"
+    )
+    assert "不要" in fb or "不能" in fb or "不可" in fb, (
+        f"forbidden 原文应是中文「不要 X」风格；got {fb!r}"
+    )
+
+
+def test_extract_action_phrases_strips_negation():
+    """M2.5.1: _extract_action_phrases() 应剥掉「不要/不能/不可」等否定词前缀。
+    """
+    from agent.template_reply import _extract_action_phrases
+
+    cases = [
+        ("不要要求客户提供任何密码",          ["要求客户提供任何密码"]),
+        ("不要用车牌替代 VIN 做最终判断",     ["用车牌替代 VIN 做最终判断"]),
+        ("不能承诺具体解决日期",              ["承诺具体解决日期"]),
+        ("不要 X；also 不要 Y",              ["also Y"]),
+        ("", []),
+    ]
+    for raw, expected in cases:
+        out = _extract_action_phrases(raw)
+        assert out == expected, f"raw={raw!r} → expected {expected} got {out}"
+
+
+def test_compliance_step_checks_template_forbidden_violation():
+    """M2.5.1: _compliance_step() 对 LLM 起草正文做 template_forbidden post-check。
+
+    已知设计局限：
+      - xlsx forbidden 是中文「不要 X」格式
+      - LLM draft body 必为英文（CLAUDE.md 硬约束）
+      - 子串匹配无法捕获英文译法
+      - post-check 仅对**中文 hallucination** / **中英混合 prompt injection** 生效
+
+    本测试断言这条局限：用真实场景（中文禁则 + 英文 draft），post-check 应**不**命中。
+    防止未来误把这条防线当成强保证。
+    """
+    from dataclasses import dataclass
+    from agent.email_agent import EmailAgent
+    from agent.azure_llm import LLMCall
+    from agent.schemas import (
+        TriageResult, RetrievalResult, DraftReply, ComplianceResult, CitedClause,
+    )
+
+    @dataclass
+    class Usage:
+        prompt_tokens: int = 0; completion_tokens: int = 0
+        cached_tokens: int = 0; reasoning_tokens: int = 0
+        @property
+        def cache_hit_rate(self): return 0.5
+
+    class StubLLM:
+        def invoke_json(self, *, schema, messages, reasoning_effort, role, **kwargs):
+            if role == "triage":
+                r = TriageResult(intent="app_binding", urgency="P2",
+                    region="North America", language="en",
+                    requires_recall_check=False, requires_warranty_lookup=False,
+                    red_flags=[], auto_reply_level="auto_draft_safe",
+                    required_info_group=[])
+            elif role == "retriever":
+                r = RetrievalResult(summary="x", evidence_score=0.8,
+                    cited_clauses=[CitedClause(doc_id="d1", section="s",
+                        quote="contact authorized service center")])
+            elif role == "drafting":
+                # 英文 draft 触发禁则的中文译法 —— post-check 应**不**命中
+                r = DraftReply(subject="Re: bind", body_md=(
+                    "Dear customer,\n\n"
+                    "We will help. Please ask the customer to provide their password "
+                    "and we will reset it for you.\n\nBest regards"
+                ), cited_clause_ids=[], next_step="share password")
+            elif role == "compliance":
+                r = ComplianceResult(sla_commitment="",
+                    verdict={"pass": True, "violations": []},
+                    suggested_reply_adjustments=[], human_review_required=False)
+            return (r, LLMCall(role=role, model="stub",
+                               reasoning_effort=reasoning_effort, usage=Usage()))
+
+    agent = EmailAgent(llm=StubLLM(), max_rewrite_attempts=0)
+    # app_binding 的 forbidden = 「不要要求客户提供任何密码」（中文）
+    # LLM draft 是英文 → post-check 不命中 → 整体通过
+    result = agent.handle_email("I cannot bind my car.")
+    # 应**不**被 escalate；handle_email 正常返回
+    viols = result.compliance.verdict.violations
+    tf_violations = [v for v in viols if "template_forbidden" in v]
+    assert not tf_violations, (
+        f"中英不匹配场景下 post-check 不应命中；got violations={tf_violations}"
+    )
+
+
+def test_compliance_step_catches_chinese_hallucination():
+    """M2.5.1: 当 LLM 在 draft 里 hallucinate 出中文禁则短语时（极低概率场景，
+    主要是 prompt injection / 模型异常），post-check 应能捕获。
+    """
+    from dataclasses import dataclass
+    from agent.email_agent import EmailAgent, NeedsHumanEscalation
+    from agent.azure_llm import LLMCall
+    from agent.schemas import (
+        TriageResult, RetrievalResult, DraftReply, ComplianceResult, CitedClause,
+    )
+
+    @dataclass
+    class Usage:
+        prompt_tokens: int = 0; completion_tokens: int = 0
+        cached_tokens: int = 0; reasoning_tokens: int = 0
+        @property
+        def cache_hit_rate(self): return 0.5
+
+    class StubLLM:
+        def invoke_json(self, *, schema, messages, reasoning_effort, role, **kwargs):
+            if role == "triage":
+                r = TriageResult(intent="app_binding", urgency="P2",
+                    region="North America", language="en",
+                    requires_recall_check=False, requires_warranty_lookup=False,
+                    red_flags=[], auto_reply_level="auto_draft_safe",
+                    required_info_group=[])
+            elif role == "retriever":
+                r = RetrievalResult(summary="x", evidence_score=0.8,
+                    cited_clauses=[CitedClause(doc_id="d1", section="s",
+                        quote="contact authorized service center")])
+            elif role == "drafting":
+                # draft 里塞中文禁则触发短语 —— 模拟 LLM hallucination / prompt injection
+                r = DraftReply(subject="Re: bind", body_md=(
+                    "Dear customer,\n\n我们已记录。我们需要您要求客户提供任何密码 "
+                    "才能继续处理。\n\nBest regards"
+                ), cited_clause_ids=[], next_step="share info")
+            elif role == "compliance":
+                # compliance LLM 直接 pass —— 靠 template_forbidden post-check 捕获
+                r = ComplianceResult(sla_commitment="",
+                    verdict={"pass": True, "violations": []},
+                    suggested_reply_adjustments=[], human_review_required=False)
+            return (r, LLMCall(role=role, model="stub",
+                               reasoning_effort=reasoning_effort, usage=Usage()))
+
+    agent = EmailAgent(llm=StubLLM(), max_rewrite_attempts=0)
+    try:
+        result = agent.handle_email("I cannot bind my car.")
+    except NeedsHumanEscalation as e:
+        # max_rewrite_attempts=0 → 第一次 fail 直接 escalate
+        assert "template_forbidden" in str(e), (
+            f"escalate reason 应含 template_forbidden；got: {e}"
+        )
+        return
+
+    pytest.fail(f"中文禁则触发应被 escalate；但 handle_email 返回了 {result}")
+
+
+# ── 4. M2.5.4: salutation 变量位 + 进程内 dedup ──────────────────────────
+
+
+def test_normalize_greeting_placeholder_replaces_dear_customer():
+    """模板正文 'Dear Customer,' 运行时 normalize 成 '{{salutation}},'。"""
+    from agent.template_reply import _normalize_greeting_placeholder
+    assert _normalize_greeting_placeholder("Dear Customer,\nFoo") == "{{salutation}},\nFoo"
+    assert _normalize_greeting_placeholder("Dear customer, rest") == "{{salutation}}, rest"
+    assert _normalize_greeting_placeholder("Hi Customer,\nFoo") == "{{salutation}},\nFoo"
+    assert _normalize_greeting_placeholder("Hello customer,\nX") == "{{salutation}},\nX"
+    # 不在开头 → 不动
+    assert _normalize_greeting_placeholder("Foo Dear Customer,") == "Foo Dear Customer,"
+    # 前面只允许空行 / 空白
+    assert _normalize_greeting_placeholder("  Dear Customer,\nX") == "  {{salutation}},\nX"
+    # 空字符串不动
+    assert _normalize_greeting_placeholder("") == ""
+    # 标题里的 "Dear Customer service team"（合法短语）不动
+    assert _normalize_greeting_placeholder(
+        "Dear Customer service team, hello"
+    ) == "Dear Customer service team, hello"
+
+
+def test_load_xlsx_templates_have_salutation_placeholder():
+    """load_xlsx 加载的所有新表 + 旧表 模板正文里没有字面 'Dear Customer,'
+    字面开头 —— 都被 normalize 成 '{{salutation}},'。"""
+    from agent.template_reply import load_xlsx
+    templates = load_xlsx()
+    literal_count = 0
+    placeholder_count = 0
+    other_count = 0
+    for t in templates:
+        body = t["template"]
+        head = body[:50].lower()
+        if head.startswith("dear customer,") or head.startswith("hi customer,") or \
+           head.startswith("hello customer,"):
+            literal_count += 1
+        elif body.startswith("{{salutation}},"):
+            placeholder_count += 1
+        else:
+            other_count += 1
+    assert literal_count == 0, (
+        f"有 {literal_count} 条模板正文仍是字面 'Dear Customer,'："
+        "normalize 漏了"
+    )
+    # 大多数模板应该被 normalize（v4 表 1 条 "Hi Team," 不命中是预期）
+    assert placeholder_count >= 200, (
+        f"placeholder 只 {placeholder_count}，期待 ≥200（来自 264+ 模板）"
+    )
+
+
+def test_personalize_greeting_matches_salutation_placeholder():
+    """personalize_greeting 识别 {{salutation}}, 占位符并替换。"""
+    from agent.greeting import personalize_greeting
+    body = "{{salutation}},\n\nThanks for your email.\n\nBest,\nTeam"
+    out = personalize_greeting(body, "John Smith <john@x.com>")
+    assert out.startswith("Dear Mr./Ms. Smith,"), out
+    # 后面正文不动
+    assert "Thanks for your email." in out
+    assert "Best,\nTeam" in out
+
+
+def test_personalize_greeting_falls_back_when_no_name():
+    """拿不到名字时不动草稿。"""
+    from agent.greeting import personalize_greeting
+    body = "{{salutation}},\n\nFoo"
+    # 纯邮箱无显示名 → 不动
+    assert personalize_greeting(body, "noreply@x.com") == body
+    # 占位词 first name → 不动
+    assert personalize_greeting(body, "Customer <c@x.com>") == body
+    # 没 sender → 不动
+    assert personalize_greeting(body, "") == body
+
+
+# ── dedup detector ──────────────────────────────────────────────────────
+
+
+def test_duplicate_detector_first_mail_not_duplicate():
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m = Mail(id="m1", subject="App not working",
+             sender="alice@x.com", received_at="",
+             body_text="My app is broken", is_read=False)
+    assert d.check_and_record(m) is None
+
+
+def test_duplicate_detector_exact_subject_match():
+    """同 sender + 同主题 → 100% 算重复。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+              received_at="", body_text="My app is broken", is_read=False)
+    m2 = Mail(id="m2", subject="App not working", sender="alice@x.com",
+              received_at="", body_text="Completely different content", is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["match"] == "subject_exact"
+    assert r["duplicate_of"] == "m1"
+    assert r["score"] == 1.0
+
+
+def test_duplicate_detector_subject_contains_with_re_prefix():
+    """Re:/Fwd: 前缀 + 同主题主干 → 主题包含 + body jaccard 命中。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+              received_at="",
+              body_text="My app is broken and I cannot use it at all", is_read=False)
+    m2 = Mail(id="m2", subject="Re: App not working", sender="alice@x.com",
+              received_at="",
+              body_text="My app is broken and I cannot use it at all because it crashes",
+              is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["match"] in ("subject_exact", "subject_contains")
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_jaccard_only():
+    """主题完全不同但 body 高度相似 → jaccard 命中。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="Charging question", sender="alice@x.com",
+              received_at="",
+              body_text="How do I schedule overnight charging for my MG4 vehicle",
+              is_read=False)
+    m2 = Mail(id="m2", subject="Overnight charging setup", sender="alice@x.com",
+              received_at="",
+              body_text="How do I schedule overnight charging for my MG4 vehicle please",
+              is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["match"] == "jaccard"
+    assert r["score"] >= 0.7
+
+
+def test_duplicate_detector_different_sender_not_dup():
+    """不同 sender 同样的 body → 不算重复（每个 sender 独立 bucket）。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+              received_at="", body_text="My app is broken", is_read=False)
+    m2 = Mail(id="m2", subject="App not working", sender="bob@y.com",
+              received_at="", body_text="My app is broken", is_read=False)
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_unrelated_mail_not_dup():
+    """主题 + body 都不相关 → 不命中。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+              received_at="", body_text="My app is broken", is_read=False)
+    m2 = Mail(id="m2", subject="Cannot bind my car", sender="alice@x.com",
+              received_at="",
+              body_text="The QR code is missing on the infotainment screen",
+              is_read=False)
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_process_mail_skips_duplicate_before_llm():
+    """process_mail 收到 dedup detector → 第二封同主题邮件走 skipped='duplicate'
+    且不调 LLM（mock LLM 计数器验证）。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail, process_mail
+
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it", is_read=False)
+    m2 = Mail(id="m2", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it still", is_read=False)
+
+    # 第一个 mock：调一次 LLM，drafter 返回非空
+    class _StubLLM:
+        def __init__(self): self.calls = 0
+        def invoke_json(self, *args, **kwargs):
+            self.calls += 1
+            from agent.schemas import TriageResult
+            return TriageResult(
+                intent="app_vehicle_control", urgency="P2",
+                region="North America", language="en",
+                requires_recall_check=False,
+                requires_warranty_lookup=False, red_flags=[],
+            ), None
+
+    llm = _StubLLM()
+    templates = [{"intent": "app_vehicle_control",
+                  "template": "{{salutation}},\n\nThanks.\n\nBest,\niSMART Service Team",
+                  "category": "App-车控车态相关", "level": "auto_draft_safe",
+                  "required_info": [], "next_step": "", "human_trigger": "",
+                  "forbidden": "", "source": "test"}]
+
+    rec1 = process_mail(
+        m1, g=None, llm=llm, templates=templates,
+        allowlist=None, dry_run=True, use_llm=True,
+        dedup=d,
+    )
+    rec2 = process_mail(
+        m2, g=None, llm=llm, templates=templates,
+        allowlist=None, dry_run=True, use_llm=True,
+        dedup=d,
+    )
+    assert llm.calls == 1, f"第二封应短路不调 LLM；实际调了 {llm.calls} 次"
+    assert rec1.get("draft_id") or rec1.get("would_post_body")
+    assert rec2.get("skipped") == "duplicate"
+    assert rec2.get("duplicate_of") == "m1"
+    assert rec2.get("duplicate_score", 0) >= 0.7
+
+
+# ── M2.5.5: CHG-SCHED-001 新模板 + pick_template body overlap ───────────
+
+
+def test_chg_sched_001_loaded_with_correct_intent():
+    """xlsx 里的 CHG-SCHED-001 加载后 intent=charging, salutation 已 normalize,
+    forbidden 字段保留（供 _compliance_step post-check 用）。"""
+    from agent.template_reply import load_xlsx
+    templates = load_xlsx()
+    chg_sched = [t for t in templates if t.get("template_id") == "CHG-SCHED-001"]
+    assert len(chg_sched) == 1, f"CHG-SCHED-001 应 1 条；实际 {len(chg_sched)}"
+    t = chg_sched[0]
+    assert t["intent"] == "charging", f"intent 应 charging；实际 {t['intent']}"
+    assert t["template"].startswith("{{salutation}},"), (
+        f"salutation 应被 normalize 成 {{salutation}},；实际开头 {t['template'][:50]!r}"
+    )
+    assert "iSMART Service Team" in t["template"]
+    assert "scheduling" in t["template"].lower()
+    assert t["forbidden"], "forbidden 字段不应为空"
+
+
+def test_pick_template_charging_picks_scheduling_template_by_overlap():
+    """charging intent + 邮件 body 含 schedule / off-peak / timer → pick_template
+    应按 body token 重叠分选中 CHG-SCHED-001 而非充电失败模板 CHG-001。"""
+    from agent.template_reply import load_xlsx, pick_template, classify_intent
+    templates = load_xlsx()
+    email_body = (
+        "Hello\nHow can I charge my car during off-peak hours from 1 a.m. to 6 a.m.\n"
+        "I don't know how to program it, can I put\n"
+        "On my electrical outlet a clock so that it starts charging at 1 am"
+    )
+    tmpl = pick_template("charging", templates, body_text=email_body)
+    assert tmpl is not None
+    assert tmpl.get("template_id") == "CHG-SCHED-001", (
+        f"应选 CHG-SCHED-001；实际选 {tmpl.get('template_id')} ({tmpl['category']})"
+    )
+
+
+def test_pick_template_charging_falls_back_when_no_overlap():
+    """charging intent + 邮件 body 不含 schedule / timer → 默认第一条候选
+    （CHG-001 充电失败）。验证 overlap 评分在无命中时正常降级。"""
+    from agent.template_reply import load_xlsx, pick_template
+    templates = load_xlsx()
+    email_body = "My car stopped charging at 80%. Range reduced after charge."
+    tmpl = pick_template("charging", templates, body_text=email_body)
+    assert tmpl is not None
+    # 不强制是哪条（取决于 token 重叠），但必须是 charging intent
+    assert tmpl["intent"] == "charging"
+
+
+def test_template_body_token_overlap_scores_chg_sched_highest():
+    """CHG-SCHED-001 的 body token 重叠分应显著高于其他 charging 候选。"""
+    from agent.template_reply import load_xlsx, _template_body_token_overlap
+    templates = load_xlsx()
+    candidates = [t for t in templates if t["intent"] == "charging"]
+    email_body = (
+        "How can I charge my car during off-peak hours from 1 a.m. to 6 a.m.\n"
+        "I want to set a charging schedule."
+    )
+    scores = {
+        t.get("template_id"): _template_body_token_overlap(t, email_body)
+        for t in candidates
+    }
+    sched_score = scores.get("CHG-SCHED-001", 0)
+    other_max = max(
+        (s for tid, s in scores.items() if tid != "CHG-SCHED-001"),
+        default=0,
+    )
+    assert sched_score > other_max, (
+        f"CHG-SCHED-001 应比其它候选分数高；got {scores}"
+    )
+    assert sched_score >= 4, f"CHG-SCHED-001 score 应 ≥ 4；got {sched_score}"
+
+
 # ── 5. entry point ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
