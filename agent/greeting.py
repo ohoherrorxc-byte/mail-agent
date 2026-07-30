@@ -138,21 +138,48 @@ _GREETING_PATTERNS: tuple[str, ...] = (
 )
 
 
-def personalize_greeting(draft_body: str, sender: str) -> str:
+def personalize_greeting(
+    draft_body: str,
+    sender: str,
+    *,
+    display_name: str | None = None,
+) -> str:
     """把草稿正文开头的默认称谓替换成发件人称谓。
 
     Args:
         draft_body: 草稿原文（来自模板或 LLM 起草）
-        sender: mail.sender（已 redact 过邮箱）
+        sender: mail.sender（可能已 redact 过邮箱）
+        display_name: Graph 解出的原始显示名（可选，优先级最高）。
+            如果传了，从这里抽姓；不传才回退去从 sender 抽。
 
     Returns:
-        替换后的正文。拿不到名字时**原样返回**。
+        替换后的正文。**始终替换占位符** —— 拿不到名字时 fallback
+        成 "Dear customer,"，但**绝不**让 `{{salutation}}` 字面量
+        出现在草稿里（M2.5.4 bug 修复：之前 fallback 时早返回
+        导致 placeholder 漏到 Outlook Drafts）。
+
+    M2.5.4 行为变更：之前 fallback 时 "不动草稿"（早返回），
+    但 LLM / 模板正文里写的是 `{{salutation}},` 占位符而不是
+    `"Dear customer,"`，结果 placeholder 字面量泄漏到草稿。
+    现在一律替换（fallback 也是 "Dear customer,"）。
     """
-    if not draft_body or not sender:
+    if not draft_body:
         return draft_body
-    greeting = build_greeting(sender)
-    if greeting == "Dear customer,":
-        return draft_body   # 拿不到名字，不动草稿
+    # 优先级：display_name > sender 抽出的显示名 > fallback
+    if display_name and display_name.strip():
+        first, last = split_first_last(display_name)
+    elif sender:
+        first, last = split_first_last(extract_display_name(sender) or "")
+    else:
+        first, last = None, None
+    # 拿不到 first/last，或 first 是占位词 → fallback "Dear customer,"
+    if not first or first.lower() in _PLACEHOLDER_FIRST_NAMES:
+        greeting = "Dear customer,"
+    elif last:
+        greeting = f"Dear Mr./Ms. {last},"
+    else:
+        greeting = f"Dear Mr./Ms. {first},"
+
     # 只替换第一次出现的默认称谓（开头）
     out = draft_body
     for pat in _GREETING_PATTERNS:

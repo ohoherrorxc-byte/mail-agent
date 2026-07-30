@@ -620,7 +620,8 @@ def run_template_reply(
     llm=None,
     templates: list[dict] | None = None,
     image_descriptions: list[str] | None = None,   # M1.6
-    sender: str | None = None,                     # M1.7: 草稿开头 "Dear customer," → "Dear Mr./Ms. {Last},"
+    sender: str | None = None,                     # M1.7: 草稿开头 "Dear customer," → "Dear Mr./Ms. {Last Name},"
+    sender_display_name: str | None = None,        # M2.5.4 fix: Graph .name 原始显示名
 ) -> dict:
     """端到端：email → (triage, template, placeholders, filled_body)
 
@@ -628,6 +629,10 @@ def run_template_reply(
     作为额外 triage 上下文。多个描述会被拼到 user message 末尾。
     M1.7: sender 用于把 "Dear customer," 替换成 "Dear Mr./Ms. {Last Name},"
           —— 仅替换开头一次，不破坏模板正文。拿不到名字时不动草稿。
+    M2.5.4 fix: sender_display_name（Graph 解出的原始显示名）优先级最高，
+                因为 sender 经过 PII redact 后只剩 `user_xxx@example.com`
+                没法抽显示名。**始终**替换占位符（fallback 也是 "Dear customer,"），
+                避免 `{{salutation}}` 字面量泄漏。
     """
     if templates is None:
         templates = load_xlsx()
@@ -651,10 +656,16 @@ def run_template_reply(
     }
     filled = fill_placeholders_naive(tmpl["template"], ctx) if tmpl else ""
 
-    # M1.7: 个性化称谓 "Dear customer," → "Dear Mr./Ms. {Last},"
-    if sender and filled:
+    # M1.7 + M2.5.4 fix: 个性化称谓 "Dear customer," / "{{salutation}}" → "Dear Mr./Ms. {Last},"
+    # 注意：**始终**调用（即便没 sender / display_name），让 fallback 把
+    # 模板正文里的 {{salutation}}, 占位符替换成 "Dear customer," —— 避免
+    # placeholder 字面量泄漏到 Outlook Drafts。
+    if filled:
         from .greeting import personalize_greeting
-        filled = personalize_greeting(filled, sender)
+        filled = personalize_greeting(
+            filled, sender or "",
+            display_name=sender_display_name,
+        )
 
     return {
         "triage":       triage.model_dump(),

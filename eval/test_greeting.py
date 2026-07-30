@@ -221,12 +221,22 @@ def test_template_reply_substitutes_greeting():
 
 
 def test_template_reply_keeps_default_when_no_sender():
-    """不传 sender 时保持原模板不变。"""
+    """M2.5.4 fix: 不传 sender 时也要把 {{salutation}}, 占位符替换成
+    "Dear customer,"（fallback） —— 避免 placeholder 字面量泄漏。
+
+    之前的行为是"不动模板"（传给 personalize_greeting 时会被早返回），
+    实际上让 {{salutation}}, 漏到 Outlook Drafts —— 这是 bug。
+    """
     from agent.template_reply import run_template_reply
     body = "I cannot bind my car, the QR code is not showing on the app"
     out = run_template_reply(body, use_llm=False, sender=None)
+    # 占位符 {{salutation}}, 必须被替换；fallback 是 "Dear customer,"
     assert out["filled_body"].startswith("Dear customer,"), (
-        f"无 sender 时应保留默认，实测: {out['filled_body'][:60]!r}"
+        f"无 sender 时占位符应被 fallback 替换，实测: {out['filled_body'][:60]!r}"
+    )
+    # 字面 placeholder 不应出现
+    assert "{{salutation}}" not in out["filled_body"], (
+        f"占位符不应泄漏，实测: {out['filled_body'][:120]!r}"
     )
 
 

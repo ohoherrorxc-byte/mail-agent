@@ -135,6 +135,66 @@ def test_skip_sender_with_no_domains_configured():
     assert r.should_skip_sender("random@mg.co.uk") is False
 
 
+# ── Part B+: M2.5.5 find_already_replied_to (CS 已回过线程检测) ─────────
+
+def test_find_already_replied_to_english_wrote():
+    """英文标准 reply quote：`<our_mbox> wrote:` → 命中。"""
+    r = MailboxRouter(uk="customer.care@ismart-service.com")
+    body = (
+        "Hi,\n\n"
+        "Thanks for forwarding. As discussed below.\n\n"
+        "On Mon, Jul 28, 2026 at 10:30 AM, Customer Care "
+        "<customer.care@ismart-service.com> wrote:\n"
+        "> Hi, please help me...\n"
+    )
+    hit = r.find_already_replied_to(body)
+    assert hit == "customer.care@ismart-service.com", hit
+
+
+def test_find_already_replied_to_chinese_xiedao():
+    """中文「写道:」reply quote → 命中。"""
+    r = MailboxRouter(uk="customer.care@ismart-service.com")
+    body = (
+        "您好，\n\n"
+        "请参考下方客服回复。\n\n"
+        "在 2026年7月28日 10:30，Customer Care "
+        "<customer.care@ismart-service.com> 写道:\n"
+        "> 您好，请问有什么可以帮您？\n"
+    )
+    hit = r.find_already_replied_to(body)
+    assert hit == "customer.care@ismart-service.com", hit
+
+
+def test_find_already_replied_to_no_quote():
+    """正文里只提到自家邮箱（无 reply quote）→ 不命中。"""
+    r = MailboxRouter(uk="customer.care@ismart-service.com")
+    body = "Please contact us at customer.care@ismart-service.com for help."
+    assert r.find_already_replied_to(body) is None
+
+
+def test_find_already_replied_to_empty_body():
+    r = MailboxRouter(uk="customer.care@ismart-service.com")
+    assert r.find_already_replied_to("") is None
+    assert r.find_already_replied_to(None) is None
+
+
+def test_find_already_replied_to_no_self_mailboxes():
+    """没配自家 mailbox → 永远不命中（防御性）。"""
+    r = MailboxRouter()  # 全空
+    body = "On Mon, Customer Care <customer.care@ismart-service.com> wrote:\n> ..."
+    assert r.find_already_replied_to(body) is None
+
+
+def test_user_upn_added_to_self_mailboxes():
+    """M2.5.5: MAILBOX_USER 也要纳入 self_mailboxes（防止漏配 MAILBOX_DEFAULT 时漏判）。"""
+    r = MailboxRouter(user_upn="customer.care@ismart-service.com")
+    # 应该把 user_upn 当 own mailbox
+    assert r.should_skip_sender("customer.care@ismart-service.com") is True
+    # reply quote 检测也应命中
+    body = "On Mon, Customer Care <customer.care@ismart-service.com> wrote:\n> ..."
+    assert r.find_already_replied_to(body) == "customer.care@ismart-service.com"
+
+
 # ── Part C: build_router_from_env ─────────────────────────────────────
 
 def test_build_router_from_env_reads_all():
@@ -300,6 +360,13 @@ TESTS = [
     ("B4 skip sender domain substring",           test_skip_sender_domain_substring_match),
     ("B5 skip sender empty safe",                 test_skip_sender_empty_safe),
     ("B6 skip with no domains configured",        test_skip_sender_with_no_domains_configured),
+    # Part B+: M2.5.5 find_already_replied_to
+    ("B+1 wrote: English reply quote detected",   test_find_already_replied_to_english_wrote),
+    ("B+2 写道: Chinese reply quote detected",     test_find_already_replied_to_chinese_xiedao),
+    ("B+3 plain email mention not detected",      test_find_already_replied_to_no_quote),
+    ("B+4 empty body safe",                        test_find_already_replied_to_empty_body),
+    ("B+5 no self mailboxes = no detection",       test_find_already_replied_to_no_self_mailboxes),
+    ("B+6 user_upn falls into self_mailboxes",     test_user_upn_added_to_self_mailboxes),
     # Part C
     ("C1 build_router_from_env reads all",        test_build_router_from_env_reads_all),
     ("C2 build_router_from_env missing safe",     test_build_router_from_env_with_missing_vars),

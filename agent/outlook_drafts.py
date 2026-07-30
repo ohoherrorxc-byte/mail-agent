@@ -94,7 +94,12 @@ _ALLOWED_GRAPH_PATTERNS: tuple[str, ...] = (
     "GET /users/{user_id}/messages/",                     # 读邮件详情
     # 写 —— 仅在原邮件下建草稿、改新草稿 body
     "POST /users/{user_id}/messages/{mail_id}/createReply",  # 建草稿
-    "PATCH /users/{user_id}/messages/{draft_id}",             # 改草稿 body（仅 draft）
+    "PATCH /users/{user_id}/messages/{draft_id}",             # 改草稿 body（仅 draft，走 _created_draft_ids 注册表）
+    # M2.5.4: 打 Outlook category（用于去重后给原邮件标 "关闭:无效邮件"）
+    # PATCH 原邮件 body `{"categories": [...]}`。**专项守门**：body 只允许
+    # `categories` key；其它 key（body / isRead / subject / importance ...）
+    # → 拒绝（即便在白名单内也不放行）。注册表不约束此路径 —— 走专项检测。
+    "PATCH /users/{user_id}/messages/{mail_id}",
     # M1.6: 读附件（用于 vision 集成；只 GET，不下载到 mailbox 之外的位置外泄）
     "GET /users/{user_id}/messages/{mail_id}/attachments/{attachment_id}/$value",
 )
@@ -224,6 +229,10 @@ class Mail:
     # [{id, name, contentType, size, isInline}]
     # M1.6.3 download_attachment() 才下载 image/*，且受 size 限制
     attachments: list[dict] = field(default_factory=list)
+    # M2.5.4 fix: Graph 解出的发件人原始显示名（"Mr. Watson"）—
+    # `sender` 字段经过 PII redact 后只剩 `user_xxx@example.com`，
+    # 没显示名；这个字段保留原始显示名供 greeting 个性化使用。
+    sender_display_name: str = ""
 
 
 class GraphClient:
@@ -268,17 +277,33 @@ class GraphClient:
                 f"[hard-constraint] Graph 调用不在白名单：{sig}。"
                 f"如需新操作，先 review 是否违反 'no send / no delete' 硬约束。"
             )
-        # PATCH messages 必须打在我们自己刚 createReply 的 draft id 上
-        # （光看 URL 不够 —— /users/me/messages/{any_id} 同样命中，
-        # 但 {any_id} 是原邮件 / 别人邮件就违规）
+        # PATCH 分两路：
+        #   A) PATCH /messages/{draft_id} → target_id 必须在我们刚 createReply
+        #      的 draft id 注册表里（老规则）
+        #   B) PATCH /messages/{mail_id}（target_id 不在注册表）→ 走专项守门：
+        #      body 只允许 `categories` key；其它全部拒绝
+        # 这种细分让 PATCH 原邮件打 category 成为**唯一**允许的副作用，
+        # 其它原邮件 PATCH（body / subject / importance / flag ...）仍被挡。
+        #
+        # 用注册表判定（而不是白名单 pattern）—— 因为 {mail_id} 和 {draft_id}
+        # 两个 pattern 在 _pattern_match 通配符机制下互吃，无法用 pattern 区分。
         if method.upper() == "PATCH" and "/messages/" in path:
             target_id = path.rsplit("/messages/", 1)[-1].strip("/")
-            if target_id not in self._created_draft_ids:
-                raise MailboxSafetyError(
-                    f"[hard-constraint] PATCH messages 仅限本进程 createReply 创建的"
-                    f" draft id；{target_id!r} 不在白名单。"
-                    f"禁止改原邮件 / 别人邮件 / 任意邮件。"
-                )
+            if target_id in self._created_draft_ids:
+                # Draft PATCH（老逻辑）：不校验 body 形状，createReply 出来的
+                # draft 我们可以自由改 body / subject / importance 等。
+                pass
+            else:
+                # 原邮件 PATCH（专项守门）→ body 只允许 `categories` key
+                body_keys = set((json_body or {}).keys())
+                allowed = {"categories"}
+                if body_keys != allowed:
+                    extra = body_keys - allowed
+                    raise MailboxSafetyError(
+                        f"[hard-constraint] PATCH 原邮件仅允许改 categories 字段；"
+                        f"body 含不允许的 key: {sorted(extra)}。"
+                        f"原邮件 body / subject / isRead / importance 等不可改。"
+                    )
         return self.session.request(
             method, f"{GRAPH_BASE}{path}",
             json=json_body, params=params,
@@ -321,24 +346,64 @@ class GraphClient:
 
     def list_unread(self, top: int = 20, folder: str = "Inbox") -> list[Mail]:
         """读未读邮件（不改 isRead，不删，不动原邮件）。
-        M1.6: 加 $expand=attachments 拿附件元数据（不下载）。"""
+        M1.6: 加 $expand=attachments 拿附件元数据（不下载）。
+
+        M2.5.4: 保留原方法签名作为薄封装，调 list_filtered() 传 isRead_eq=False。
+        """
+        return self.list_filtered(top=top, folder=folder, is_read=False)
+
+    def list_filtered(
+        self,
+        top: int = 20,
+        folder: str = "Inbox",
+        *,
+        since: Optional[str] = None,        # ISO 8601, e.g. "2026-07-01T00:00:00Z"
+        until: Optional[str] = None,        # ISO 8601, e.g. "2026-07-31T00:00:00Z"
+        is_read: Optional[bool] = None,     # True/False 限定；None = 不限
+        exclude_categories: Optional[list[str]] = None,
+                                            # 排除带这些 category 的（如 ["关闭:无效邮件"]）
+        order: str = "desc",                # "asc" / "desc"
+    ) -> list[Mail]:
+        """读邮件（不限读未读），支持日期范围 + category 排除 + 排序方向。
+
+        M2.5.4 引入：补 list_unread() 不能覆盖的场景——历史邮件 backlog 起草
+        （--since / --until）+ 排除已关闭邮件（--exclude-category）。
+        """
+        parts: list[str] = []
+        if since:
+            parts.append(f"receivedDateTime ge {since}")
+        if until:
+            parts.append(f"receivedDateTime lt {until}")
+        if is_read is True:
+            parts.append("isRead eq true")
+        elif is_read is False:
+            parts.append("isRead eq false")
+        # category 排除：not categories/any(c: c eq 'X')
+        for cat in (exclude_categories or []):
+            cat_esc = cat.replace("'", "''")  # OData string escape
+            parts.append(f"not categories/any(c: c eq '{cat_esc}')")
+        params: dict[str, str] = {
+            "$top":  str(top),
+            "$select": "id,subject,sender,receivedDateTime,bodyPreview,body,isRead,categories",
+            "$orderby": f"receivedDateTime {order}",
+            "$expand": "attachments",
+        }
+        if parts:
+            params["$filter"] = " and ".join(parts)
         data = self._get(
             f"/users/{self.user_id}/mailFolders/{folder}/messages",
-            params={
-                "$filter": "isRead eq false",
-                "$top":  str(top),
-                "$select": "id,subject,sender,receivedDateTime,bodyPreview,body,isRead",
-                "$orderby": "receivedDateTime desc",
-                "$expand": "attachments",
-            },
+            params=params,
         )
         out: list[Mail] = []
         for m in data.get("value", []):
             body = m.get("body", {}).get("content", "")
+            # M2.5.4 fix: 同时解 sender.emailAddress.name（显示名），greeting 个性化用
+            _sndr = m.get("sender") or {}
+            _sndr_addr = _sndr.get("emailAddress") or {}
             out.append(Mail(
                 id=m["id"],
                 subject=m.get("subject", ""),
-                sender=(m.get("sender") or {}).get("emailAddress", {}).get("address", ""),
+                sender=_sndr_addr.get("address", ""),
                 received_at=m.get("receivedDateTime", ""),
                 body_text=_html_to_text(body) if "<" in body else body,
                 is_read=m.get("isRead", False),
@@ -352,13 +417,15 @@ class GraphClient:
                     }
                     for a in m.get("attachments", [])
                 ],
+                sender_display_name=_sndr_addr.get("name", ""),
             ))
         return out
 
     def get_message_by_id(self, mail_id: str) -> Optional[Mail]:
         """按 Graph message ID 取单封邮件（不动原邮件，只读）。
         找不到 / 权限不够返回 None。
-        M1.6: 加 $expand=attachments 拿附件元数据。"""
+        M1.6: 加 $expand=attachments 拿附件元数据。
+        M2.5.4 fix: 解 sender.emailAddress.name 显示名供 greeting 用。"""
         try:
             m = self._get(
                 f"/users/{self.user_id}/messages/{mail_id}",
@@ -372,10 +439,12 @@ class GraphClient:
                 return None
             raise
         body = m.get("body", {}).get("content", "")
+        _sndr = m.get("sender") or {}
+        _sndr_addr = _sndr.get("emailAddress") or {}
         return Mail(
             id=m["id"],
             subject=m.get("subject", ""),
-            sender=(m.get("sender") or {}).get("emailAddress", {}).get("address", ""),
+            sender=_sndr_addr.get("address", ""),
             received_at=m.get("receivedDateTime", ""),
             body_text=_html_to_text(body) if "<" in body else body,
             is_read=m.get("isRead", False),
@@ -389,6 +458,7 @@ class GraphClient:
                 }
                 for a in m.get("attachments", [])
             ],
+            sender_display_name=_sndr_addr.get("name", ""),
         )
 
     def create_draft_reply(
@@ -426,6 +496,43 @@ class GraphClient:
             body=patch_body,
         )
         return draft_id
+
+    def add_category(self, mail_id: str, category: str) -> None:
+        """给指定邮件打 Outlook category 标签（不删 / 不动原邮件）。
+
+        用途（M2.5.4）：去重后给重复邮件标 "关闭:无效邮件"，人工 review
+        queue 不用再看一眼。
+
+        Graph API：
+          PATCH /users/{user_id}/messages/{mail_id}
+          body: {"categories": ["关闭:无效邮件"]}
+        多次调用会**替换** categories 字段为传入的列表；为保留已有 category，
+        调用方先 GET 拿当前 categories 列表 → 追加新 category → PATCH 整个列表。
+
+        守门（专项）：
+          - HTTP 层：PATCH 路径在 _ALLOWED_GRAPH_PATTERNS 白名单
+          - 字段层：_request() 检查 body 只含 `categories` key；其它（body /
+            subject / isRead / importance / flag ...）一律 raise
+          - 不动 draft 注册表：draft PATCH 仍走 _created_draft_ids 注册表
+            约束；这条路径**不**约束 draft id
+          - category 参数不接受空字符串 / 含 `,`（避免 Graph 把它当多标签解析错位）
+
+        Raises:
+          ValueError: category 为空 / 含非法字符
+          MailboxSafetyError: Graph 调用被 _request() 守卫拦下
+        """
+        category = (category or "").strip()
+        if not category:
+            raise ValueError("category 不能为空")
+        if "," in category:
+            raise ValueError(
+                f"category 含逗号 (会触发 Graph 集合解析错位)：{category!r}"
+            )
+        # PATCH 原邮件 body 只含 categories 字段（专项守门）
+        self._patch(
+            f"/users/{self.user_id}/messages/{mail_id}",
+            body={"categories": [category]},
+        )
 
     # ── M1.6: 附件下载（仅 image/* + 受大小限制 + 不写 mailbox 之外）──
     def download_attachment(self, mail_id: str, attachment_id: str) -> bytes:
@@ -546,6 +653,9 @@ def _redact_mail(mail: Mail) -> tuple[Mail, dict]:
             received_at=mail.received_at, body_text=new_body, is_read=mail.is_read,
             # M1.6: attachments 透传（附件元数据本身不含 PII，无须 redact）
             attachments=mail.attachments,
+            # M2.5.4 fix: sender_display_name 是 Graph 解出的原始显示名，
+            # 走 PII redact 也只是名字不是 email/phone，不脱敏 —— 透传即可
+            sender_display_name=mail.sender_display_name,
         ),
         counts,
     )
@@ -588,13 +698,19 @@ class MailboxRouter:
         au: str | None = None,
         default: str | None = None,
         skip_domains: str | None = None,
+        user_upn: str | None = None,    # M2.5.5: 当前处理 mailbox (MAILBOX_USER)
     ):
         self.uk = (uk or "").strip() or None
         self.au = (au or "").strip() or None
         self.default = (default or "").strip() or None
+        # M2.5.5: 把"我们正在用"的 mailbox 也纳入 self_mailboxes 集合。
+        # 原因：MAILBOX_USER 是 Graph 读取 / 写草稿用的 mailbox 地址 —— 即
+        # 这个 PoC 跑在哪台 mailbox。它本身也是"自家" mailbox（任何
+        # `customer.care@...` 写来的邮件都是 CS 自己 / 自动转发）。
+        self.user_upn = (user_upn or "").strip() or None
         # 自家 mailbox 全集（lowercase，做 self-mail 匹配）
         self._self_mailboxes: set[str] = {
-            m.lower() for m in (self.uk, self.au, self.default) if m
+            m.lower() for m in (self.uk, self.au, self.default, self.user_upn) if m
         }
         # skip domain 列表（lowercase，子串匹配 sender email）
         self._skip_domains: list[str] = [
@@ -639,14 +755,83 @@ class MailboxRouter:
                 return True
         return False
 
+    def find_already_replied_to(
+        self, body_text: str,
+    ) -> Optional[str]:
+        """检测邮件正文里是否带有自家 mailbox 的"wrote: / 写道:"引用。
+
+        用途（M2.5.5）：客户把 CS 之前的回复 forward 回 inbox / 用 Reply 引用
+        上一封时，邮件正文会出现 `<our-mailbox> wrote:` 或
+        `<our-mailbox> 写道:` 标准 reply quote —— 这表示 CS 在这封邮件之前
+        已经回过同一线程，再起草是重复劳动，应该 skip。
+
+        Why 在 process_mail 主循环里做（而不是 Graph conversation API）：
+        Graph 查 conversationId 要为每封多走一次 API（N+1 ~200ms/封），
+        且 Graph 的 `conversationId` 在转发 / 跨 mailbox 场景下不一定能
+        拼回原始线程。body keyword 检查 0 额外 API 调用，覆盖 90%+ 标准
+        email client 引用格式。
+
+        Args:
+            body_text: 邮件**原文**（必须在 _redact_mail 之前调用，否则
+                       邮箱已被 hash 过无法匹配）。
+
+        Returns:
+            命中时返回 own mailbox 地址（audit 用），无命中返回 None。
+
+        注意：quoted reply prefix 的 mailbox 地址是 **CS 上一封回复里**的邮箱
+        —— 它**必然**在 self_mailboxes 里。误判风险（客户在正文里碰巧提到
+        CS 邮箱而无回复意图）极低：标准 reply client 会把 quote 嵌在「On ...,
+        xxx wrote:」或「xxx 写道:」模板里，单纯提到邮箱不会同时带这些
+        关键字。
+        """
+        if not body_text or not self._self_mailboxes:
+            return None
+        body_lower = body_text.lower()
+        # 标准 reply quote 标识（覆盖 Outlook / Gmail / Apple Mail + 中文 / 西文 / 德文）
+        # 关键模式：<邮箱> 后面紧跟 wrote: / 写道: / escribió: / a écrit: / schrieb:
+        reply_markers = [
+            "wrote:",        # English
+            "写道:",         # 简体中文
+            "写道：",         # 全角冒号
+            "escribió:",     # Español
+            "a écrit:",      # Français
+            "ha scritto:",   # Italiano
+            "schrieb:",      # Deutsch
+            "skrev:",        # Norsk / Svenska
+            "skrev en e-post",   # Norsk 长形式
+        ]
+        for mbox in self._self_mailboxes:
+            m = mbox.strip().lower()
+            if not m:
+                continue
+            for marker in reply_markers:
+                # 三种格式：
+                #   1. Name <mbox> wrote:
+                #   2. mbox wrote:    （裸邮箱）
+                #   3. ... on Mon, ... mbox wrote:    （Gmail 风格）
+                patterns = [
+                    f"<{m}> {marker}",       # 标准
+                    f"<{m}>\n{marker}",      # 换行变形
+                    f"{m} {marker}",         # 裸邮箱
+                ]
+                for p in patterns:
+                    if p in body_lower:
+                        return mbox
+        return None
+
 
 def build_router_from_env() -> MailboxRouter:
-    """从环境变量构造 MailboxRouter（M1.5 默认入口）。"""
+    """从环境变量构造 MailboxRouter（M1.5 默认入口）。
+
+    M2.5.5: 多读 `MAILBOX_USER` 作为 user_upn —— 即当前 PoC 跑的 mailbox
+            (会纳入 self_mailboxes 集合)。
+    """
     return MailboxRouter(
         uk=os.environ.get("MAILBOX_UK"),
         au=os.environ.get("MAILBOX_AU"),
         default=os.environ.get("MAILBOX_DEFAULT"),
         skip_domains=os.environ.get("SKIP_SENDER_DOMAINS"),
+        user_upn=os.environ.get("MAILBOX_USER"),
     )
 
 
@@ -904,9 +1089,37 @@ def process_mail(
             "skip_reason_detail": "sender matches own mailbox or skip domain",
         }
 
+    # ── 0.5. M2.5.5: CS 已回复线程检测（正文里 own_mbox wrote: / 写道:）──
+    # 客户把 CS 之前回复 forward 回 inbox 时，邮件正文会出现自家 mailbox 的
+    # reply quote → 这封不该再建草稿。必须**在 _redact_mail 之前**做（邮箱
+    # 被 redact 后匹配不到）。命中后打 "关闭:已处理" category 防止下次重跑。
+    if router is not None:
+        hit_mbox = router.find_already_replied_to(mail.body_text)
+        if hit_mbox:
+            LOG.info("[SKIP→already_handled] %s — body quotes own mailbox: %s",
+                     mail.subject[:50], hit_mbox)
+            tag_applied = False
+            tag_err: Optional[str] = None
+            if g is not None:
+                try:
+                    g.add_category(mail.id, "关闭:已处理")
+                    tag_applied = True
+                except Exception as e:
+                    tag_err = f"{type(e).__name__}: {e}"
+                    LOG.warning("[TAG-FAIL] %s → %s", mail.subject[:50], tag_err)
+            return {
+                "mail_id":            mail.id,
+                "subject":            mail.subject,
+                "sender":             mail.sender,
+                "skipped":            "cs_already_handled",
+                "skip_reason_detail": f"body quotes own mailbox {hit_mbox!r}",
+                "matched_self_mbox":  hit_mbox,
+                "tag_applied":        tag_applied,
+                "tag_error":          tag_err,
+            }
+
     # ── M2.5.4: 重复邮件检测（去重）──────────────────────────────────────
     # 同一客户重复追问同一件事 → 只保留 1 条起草，剩下的 tag 关闭:无效邮件。
-    # 本轮只 skip 起草 + 写 record；打 category 留给 M2 PATCH guard 放行后做。
     # detector 是进程内单例（main() 里 new 一次 + 透传给 process_mail）。
     if dedup is not None:
         dup = dedup.check_and_record(mail)
@@ -914,6 +1127,21 @@ def process_mail(
             LOG.info("[SKIP→duplicate] %s — %s (of %s, score=%.2f)",
                      mail.subject[:50], dup["match"],
                      dup["duplicate_of"], dup["score"])
+            # M2.5.4: 给重复邮件打 Outlook category 标签，方便人工 review
+            # 跳过；Graph add_category 不删 / 不移动 / 不改 isRead，
+            # 仅累加 category 集合。"关闭:无效邮件" 是 Outlook 显示名，
+            # 多人协作时团队成员一眼可见。
+            category_applied = False
+            category_error: Optional[str] = None
+            if g is not None:
+                try:
+                    g.add_category(mail.id, "关闭:无效邮件")
+                    category_applied = True
+                    LOG.info("[TAG] %s → '关闭:无效邮件'", mail.subject[:50])
+                except Exception as e:
+                    category_error = f"{type(e).__name__}: {e}"
+                    LOG.warning("[TAG-FAIL] %s → %s",
+                                mail.subject[:50], category_error)
             return {
                 "mail_id":            mail.id,
                 "subject":            mail.subject,
@@ -925,6 +1153,8 @@ def process_mail(
                 ),
                 "duplicate_of":       dup["duplicate_of"],
                 "duplicate_score":    dup["score"],
+                "category_applied":   category_applied,
+                "category_error":     category_error,
             }
 
     # ── PII redact：邮件正文 / subject / sender 一律先脱敏 ────────────────
@@ -959,6 +1189,7 @@ def process_mail(
         templates=templates,
         image_descriptions=image_descs,
         sender=mail.sender,    # M1.7: 个性化 "Dear customer," → "Dear Mr./Ms. {Last},"
+        sender_display_name=mail.sender_display_name,   # M2.5.4 fix: 优先用 Graph 原始显示名
     )
     skip = should_skip(mail, result["triage"], result["template_doc"], allowlist)
     record = {
@@ -1028,6 +1259,31 @@ def main() -> int:
     p.add_argument("--top", type=int, default=20, help="读最新 N 封未读")
     p.add_argument("--folder", default="Inbox", help="邮箱文件夹名")
     p.add_argument("--dry-run", action="store_true", help="只读不建草稿")
+    # M2.5.4: 历史 backlog 起草支持（日期范围 / 已读 / 已关闭排除 / 升序）
+    p.add_argument(
+        "--since",
+        help="ISO 8601 下界（含），e.g. 2026-07-01T00:00:00Z",
+    )
+    p.add_argument(
+        "--until",
+        help="ISO 8601 上界（不含），e.g. 2026-07-31T00:00:00Z",
+    )
+    p.add_argument(
+        "--include-read",
+        action="store_true",
+        help="把已读邮件也纳入（默认只看未读）",
+    )
+    p.add_argument(
+        "--exclude-category",
+        action="append",
+        default=[],
+        help="排除带这些 category 的邮件（可重复），默认排除 '关闭:无效邮件' 和 '关闭:已处理'",
+    )
+    p.add_argument(
+        "--order",
+        choices=["asc", "desc"], default="desc",
+        help="按 receivedDateTime 排序方向；默认 desc（最新在前）",
+    )
     p.add_argument("--no-llm", action="store_true", help="用关键词分类，跳过 Azure OpenAI（smoke test 用）")
     p.add_argument(
         "--intent-allowlist",
@@ -1133,8 +1389,27 @@ def main() -> int:
             else:
                 mails.append(m)
     else:
-        LOG.info("拉 %s/%s 未读邮件 ...", args.folder, args.top)
-        mails = g.list_unread(top=args.top, folder=args.folder)
+        # 构造 list_filtered 参数：默认排除 '关闭:无效邮件' category
+        exclude_cats = list(args.exclude_category)
+        if not exclude_cats:
+            exclude_cats = ["关闭:无效邮件", "关闭:已处理"]
+        # 已读 / 未读：默认只看未读；--include-read 看全部
+        is_read = False if not args.include_read else None
+        LOG.info(
+            "拉 %s/%s 邮件 top=%d since=%s until=%s is_read=%s exclude=%s order=%s ...",
+            args.folder, "全部" if is_read is None else ("未读" if is_read is False else "已读"),
+            args.top,
+            args.since or "(无)", args.until or "(无)",
+            "all" if is_read is None else is_read,
+            exclude_cats, args.order,
+        )
+        mails = g.list_filtered(
+            top=args.top, folder=args.folder,
+            since=args.since, until=args.until,
+            is_read=is_read,
+            exclude_categories=exclude_cats,
+            order=args.order,
+        )
         before = len(mails)
         mails = _apply_post_filters(mails, args)
         if before != len(mails):

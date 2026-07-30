@@ -722,15 +722,35 @@ def test_personalize_greeting_matches_salutation_placeholder():
 
 
 def test_personalize_greeting_falls_back_when_no_name():
-    """拿不到名字时不动草稿。"""
+    """M2.5.4 fix: 拿不到名字也要替换占位符（之前早返回导致 placeholder 漏网）。
+
+    任何 _GREETING_PATTERNS 命中（包括 {{salutation}},）都必须替换成最终
+    greeting（fallback 也是 "Dear customer,"）—— 绝不让 placeholder 字面量
+    泄漏到 Outlook Drafts。
+    """
     from agent.greeting import personalize_greeting
     body = "{{salutation}},\n\nFoo"
-    # 纯邮箱无显示名 → 不动
-    assert personalize_greeting(body, "noreply@x.com") == body
-    # 占位词 first name → 不动
-    assert personalize_greeting(body, "Customer <c@x.com>") == body
-    # 没 sender → 不动
-    assert personalize_greeting(body, "") == body
+    # 纯邮箱无显示名 → fallback "Dear customer,"
+    out = personalize_greeting(body, "noreply@x.com")
+    assert out.startswith("Dear customer,"), out
+    assert "Foo" in out
+    # 占位词 first name → fallback
+    out2 = personalize_greeting(body, "Customer <c@x.com>")
+    assert out2.startswith("Dear customer,"), out2
+    # 没 sender + 没 display_name → fallback
+    out3 = personalize_greeting(body, "")
+    assert out3.startswith("Dear customer,"), out3
+
+
+def test_personalize_greeting_uses_display_name_over_sender():
+    """M2.5.4 fix: display_name 优先 —— 即使 sender 是 redacted 后的
+    `user_xxx@example.com`（无显示名可抽），也能拿到原始姓名做个性化。"""
+    from agent.greeting import personalize_greeting
+    body = "{{salutation}},\n\nFoo"
+    # display_name 优先
+    out = personalize_greeting(body, "user_abc12345@example.com",
+                               display_name="Philip Watson")
+    assert out.startswith("Dear Mr./Ms. Watson,"), out
 
 
 # ── dedup detector ──────────────────────────────────────────────────────
@@ -872,6 +892,437 @@ def test_process_mail_skips_duplicate_before_llm():
     assert rec2.get("skipped") == "duplicate"
     assert rec2.get("duplicate_of") == "m1"
     assert rec2.get("duplicate_score", 0) >= 0.7
+
+
+def test_process_mail_duplicate_applies_category_via_graph():
+    """重复邮件 + 真 Graph 客户端 → 调 add_category('关闭:无效邮件')，
+    且原邮件不动（isRead 仍 False、不删、不移动）。"""
+    from unittest.mock import MagicMock
+    from agent.outlook_drafts import (
+        _DuplicateDetector, Mail, process_mail, GraphClient,
+    )
+
+    # 伪造 GraphClient：只记录调用的 _post URL + body
+    class _StubGraph:
+        def __init__(self):
+            self.calls: list[tuple[str, dict]] = []
+        def add_category(self, mail_id, category):
+            self.calls.append((
+                f"/users/me/messages/{mail_id}/categories",
+                {"categories": [category]},
+            ))
+
+    g = _StubGraph()
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it", is_read=False)
+    m2 = Mail(id="m2", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it still", is_read=False)
+
+    class _StubLLM:
+        def invoke_json(self, *args, **kwargs):
+            from agent.schemas import TriageResult
+            return TriageResult(
+                intent="app_vehicle_control", urgency="P2",
+                region="North America", language="en",
+                requires_recall_check=False,
+                requires_warranty_lookup=False, red_flags=[],
+            ), None
+
+    templates = [{"intent": "app_vehicle_control",
+                  "template": "{{salutation}},\n\nThanks.",
+                  "category": "App-车控车态相关", "level": "auto_draft_safe",
+                  "required_info": [], "next_step": "", "human_trigger": "",
+                  "forbidden": "", "source": "test"}]
+
+    # 第一封走完整流程（dry_run，没真 Graph 调用）
+    process_mail(m1, g=g, llm=_StubLLM(), templates=templates,
+                 allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    # 第二封：重复 → 应调 add_category('关闭:无效邮件')
+    rec2 = process_mail(m2, g=g, llm=_StubLLM(), templates=templates,
+                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+
+    assert rec2["skipped"] == "duplicate"
+    assert rec2["category_applied"] is True
+    assert rec2["category_error"] is None
+    assert len(g.calls) == 1
+    url, body = g.calls[0]
+    assert url == "/users/me/messages/m2/categories"
+    assert body == {"categories": ["关闭:无效邮件"]}
+
+
+def test_process_mail_duplicate_category_failure_captured_not_raised():
+    """Graph add_category 抛错时 process_mail 不传播，只在 record 里写
+    category_error 给后续审计。LLM 仍不调。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail, process_mail
+
+    class _FailingGraph:
+        def add_category(self, mail_id, category):
+            raise RuntimeError("simulated Graph 503")
+
+    g = _FailingGraph()
+    d = _DuplicateDetector()
+    m1 = Mail(id="m1", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it", is_read=False)
+    m2 = Mail(id="m2", subject="App not working",
+              sender="alice@x.com", received_at="",
+              body_text="My app is broken and I cannot use it still", is_read=False)
+
+    class _StubLLM:
+        def __init__(self): self.calls = 0
+        def invoke_json(self, *args, **kwargs):
+            self.calls += 1
+            from agent.schemas import TriageResult
+            return TriageResult(
+                intent="app_vehicle_control", urgency="P2",
+                region="North America", language="en",
+                requires_recall_check=False,
+                requires_warranty_lookup=False, red_flags=[],
+            ), None
+
+    llm = _StubLLM()
+    templates = [{"intent": "app_vehicle_control",
+                  "template": "{{salutation}},\n\nThanks.",
+                  "category": "App-车控车态相关", "level": "auto_draft_safe",
+                  "required_info": [], "next_step": "", "human_trigger": "",
+                  "forbidden": "", "source": "test"}]
+
+    process_mail(m1, g=g, llm=llm, templates=templates,
+                 allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    rec2 = process_mail(m2, g=g, llm=llm, templates=templates,
+                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+
+    assert rec2["skipped"] == "duplicate"
+    assert rec2["category_applied"] is False
+    assert "simulated Graph 503" in (rec2["category_error"] or "")
+    assert llm.calls == 1, "category 失败也不应触发第二封 LLM"
+
+
+# ── M2.5.4: list_filtered 拉邮件参数 ──────────────────────────────────
+
+
+def test_list_filtered_builds_odata_filter_with_since_until():
+    """list_filtered(since, until, is_read=None, exclude_categories=['关闭:无效邮件'])
+    应构造完整 OData $filter。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.text = '{"value": []}'
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.list_filtered(
+        top=20, since="2026-07-01T00:00:00Z", until="2026-07-31T00:00:00Z",
+        is_read=None, exclude_categories=["关闭:无效邮件"], order="asc",
+    )
+
+    # 验证构造的 $filter 包含所有条件（在 params 里，不在 path 里）
+    call = g.session.request.call_args
+    params = call.kwargs.get("params") or {}
+    filt = params.get("$filter", "")
+    orderby = params.get("$orderby", "")
+    assert "receivedDateTime ge 2026-07-01" in filt
+    assert "receivedDateTime lt 2026-07-31" in filt
+    assert "categories/any" in filt
+    assert "关闭" in filt
+    assert orderby == "receivedDateTime asc"
+
+
+def test_list_filtered_is_read_true_keeps_only_read():
+    """is_read=True → $filter 含 'isRead eq true'。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.text = '{"value": []}'
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.list_filtered(top=10, is_read=True, order="desc")
+
+    call = g.session.request.call_args
+    params = call.kwargs.get("params") or {}
+    assert "isRead eq true" in params.get("$filter", "")
+
+
+def test_list_filtered_is_read_false_keeps_only_unread():
+    """is_read=False → $filter 含 'isRead eq false'（同旧 list_unread 行为）。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.text = '{"value": []}'
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.list_filtered(top=10, is_read=False, order="desc")
+
+    call = g.session.request.call_args
+    params = call.kwargs.get("params") or {}
+    assert "isRead eq false" in params.get("$filter", "")
+
+
+def test_list_filtered_exclude_categories_multiple():
+    """多个 exclude_categories → 多个 not categories/any(c: c eq ...) 子句 AND 起来。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.text = '{"value": []}'
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.list_filtered(
+        top=10, is_read=False,
+        exclude_categories=["关闭:无效邮件", "已处理"],
+        order="asc",
+    )
+    call = g.session.request.call_args
+    params = call.kwargs.get("params") or {}
+    filt = params.get("$filter", "")
+    assert "关闭" in filt
+    assert "已处理" in filt
+    assert filt.count(" and ") >= 2, f"应至少 2 个 and；got: {filt}"
+
+
+def test_list_unread_delegates_to_list_filtered():
+    """list_unread() 默认 is_read=False，向后兼容。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.text = '{"value": []}'
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.list_unread(top=10)
+
+    call = g.session.request.call_args
+    params = call.kwargs.get("params") or {}
+    filt = params.get("$filter", "")
+    orderby = params.get("$orderby", "")
+    assert "isRead eq false" in filt
+    assert orderby == "receivedDateTime desc"
+
+
+# ── add_category 安全 guard（M2.5.4 PATCH 原邮件 + 专项守门）─────────
+
+
+def test_add_category_rejects_empty_string():
+    """category 为空 → ValueError（不允许空 category 创建空标签）。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g.add_category("m1", "")
+    except ValueError as e:
+        assert "不能为空" in str(e)
+        return
+    raise AssertionError("空 category 应 raise ValueError")
+
+
+def test_add_category_rejects_comma_separated():
+    """category 含 `,` → ValueError（避免 Graph 集合解析错位）。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g.add_category("m1", "关闭:无效邮件, foo")
+    except ValueError as e:
+        assert "逗号" in str(e)
+        return
+    raise AssertionError("含逗号 category 应 raise ValueError")
+
+
+def test_add_category_uses_patch_not_post():
+    """add_category 走 PATCH 原邮件（不是 POST /categories，那个 405）。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g.add_category("fake-id", "关闭:无效邮件")
+
+    call = g.session.request.call_args
+    method, url = call.args[0], call.args[1]
+    assert method == "PATCH"
+    # _patch 内部把 path 拼成完整 URL；检查路径末尾 + 拼接
+    assert url.endswith("/users/me/messages/fake-id"), url
+    assert call.kwargs["json"] == {"categories": ["关闭:无效邮件"]}
+
+
+def test_add_category_passes_guard_even_when_not_in_draft_registry():
+    """add_category 走 PATCH 原邮件（不在 _created_draft_ids 注册表）→ 专项
+    守门放过；body 只含 categories → 不 raise。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    g.add_category("original-mail-not-in-registry", "关闭:无效邮件")
+    # 不应 raise
+
+
+# ── PATCH 原邮件专项守门（专项检测 categories-only body）─────────────
+
+
+def test_patch_original_mail_with_body_field_blocked():
+    """PATCH 原邮件 + body 含 'body' key → 拒绝（不光是 isRead；所有其它 key 都拒）。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    try:
+        g._patch(
+            "/users/me/messages/original-mail-id",
+            body={"categories": ["关闭:无效邮件"], "body": {"contentType": "text",
+                                                            "content": "hi"}},
+        )
+    except MailboxSafetyError as e:
+        assert "categories 字段" in str(e) or "不允许" in str(e)
+        return
+    raise AssertionError("PATCH 原邮件带 body 字段应被专项守门拦下")
+
+
+def test_patch_original_mail_with_subject_blocked():
+    """PATCH 原邮件 + body 含 'subject' → 拒绝。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g._patch(
+            "/users/me/messages/m1",
+            body={"categories": ["x"], "subject": "new subj"},
+        )
+    except MailboxSafetyError:
+        return
+    raise AssertionError("subject 也应被拒")
+
+
+def test_patch_original_mail_with_importance_blocked():
+    """PATCH 原邮件 + body 含 'importance' → 拒绝。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g._patch(
+            "/users/me/messages/m1",
+            body={"categories": ["x"], "importance": "high"},
+        )
+    except MailboxSafetyError:
+        return
+    raise AssertionError("importance 也应被拒")
+
+
+def test_patch_original_mail_with_isRead_blocked():
+    """PATCH 原邮件 + body 含 'isRead' → 拒绝（已有老规则 + 专项规则双重拦截）。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g._patch(
+            "/users/me/messages/m1",
+            body={"categories": ["x"], "isRead": True},
+        )
+    except MailboxSafetyError:
+        return
+    raise AssertionError("isRead 应被拒")
+
+
+def test_patch_original_mail_with_flag_blocked():
+    """PATCH 原邮件 + body 含 'flag' → 拒绝（flag 改 read state 是常见泄露口）。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    try:
+        g._patch(
+            "/users/me/messages/m1",
+            body={"categories": ["x"], "flag": {"flagStatus": "flagged"}},
+        )
+    except MailboxSafetyError:
+        return
+    raise AssertionError("flag 也应被拒")
+
+
+def test_patch_original_mail_categories_only_allowed():
+    """PATCH 原邮件 + body 只有 categories → 放行。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = set()
+
+    g._patch(
+        "/users/me/messages/m1",
+        body={"categories": ["关闭:无效邮件"]},
+    )
+    # 不 raise
+
+
+def test_patch_draft_still_uses_draft_registry():
+    """PATCH draft 路径仍走 _created_draft_ids 注册表 —— 不被专项守门吞。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.user_id = "me"
+    g._created_draft_ids = {"my-draft-id"}   # 只这一个 draft 在注册表
+
+    # 1) 注册表内的 draft id → 放行（不需 body 形状校验）
+    g.session.request.return_value.status_code = 200
+    g.session.request.return_value.raise_for_status = MagicMock()
+    g._patch(
+        "/users/me/messages/my-draft-id",
+        body={"body": {"contentType": "text", "content": "hi"}},
+    )
+    # 不 raise
+
+    # 2) 不在注册表的 id → raise（老逻辑）
+    g2 = GraphClient.__new__(GraphClient)
+    g2.session = MagicMock()
+    g2.user_id = "me"
+    g2._created_draft_ids = set()
+    try:
+        g2._patch(
+            "/users/me/messages/some-other-id",
+            body={"body": {"contentType": "text", "content": "hi"}},
+        )
+    except MailboxSafetyError:
+        return
+    raise AssertionError("非注册表 draft id 应被老 guard 拦")
 
 
 # ── M2.5.5: CHG-SCHED-001 新模板 + pick_template body overlap ───────────
