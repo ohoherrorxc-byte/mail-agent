@@ -27,6 +27,10 @@ eval/runs/
 售后邮件台账*
 *台账*
 samples_real_seed.json
+_samples_to_label.json
+# M2.6: harvest_samples.py output — Graph 拉来的候选邮件，已 redact 但仍含线索
+eval/candidates*.jsonl
+eval/_candidates*.jsonl
 
 # local file library — bulk xls/pdf exports, never commit
 文件库/

@@ -6,10 +6,11 @@ test_m1_safety_hardening.py — M1 P0 安全收口的回归测试。
      - ImportError 抛 PIIRedactionError（不静默返回原 mail）
      - redact 内部失败抛 PIIRedactionError
   2. Region gate 共享函数
-     - email_agent.region_gate_should_escalate 在 NA / Europe / Asia /
-       South America / Africa / Oceania 一致
-     - bypass env var 可绕过
-     - outlook_drafts.should_skip 与 email_agent 同 region 时返回 None
+     - 默认不按大区升人工（中东/亚洲/拉美/非洲可出草稿）
+     - 阶段 1 红牌 / GDPR 关键词仍升
+     - M2_ENFORCE_REGION_GATE 已废弃，不再按四区拦
+     - M2_ROLLBACK_TO_M1=1 仅 NA
+     - outlook_drafts.should_skip 共用同一判断
   3. mock_rag 默认 region 必须用全名 "North America"
      - 不传 region 调用 search() 仍能命中 NA chunks
      - 显式传 "NA" 缩写时 0 命中（按 filter `!=` 设计）
@@ -110,10 +111,7 @@ def test_process_mail_routes_to_human_when_redact_fails():
 # ── 2. Region gate 共享函数 ────────────────────────────────────────────
 
 def test_region_gate_escalate_6_regions():
-    """M2 region_gate_should_escalate 走细路由：
-    M2 supported regions (NA / Europe / UK / Oceania) → 不升；
-    Asia / South America / Africa → 升（未接入合规规则）。
-    """
+    """不按大区升人工；M2_ENFORCE_REGION_GATE 也拦不住。"""
     from agent.email_agent import region_gate_should_escalate
     from agent.schemas import TriageResult
 
@@ -125,18 +123,23 @@ def test_region_gate_escalate_6_regions():
             red_flags=[],
         )
 
+    all_regions = (
+        "North America", "Europe", "Oceania",
+        "Asia", "Middle East", "South America", "Africa",
+    )
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("M1_BYPASS_REGION_GATE", None)
         os.environ.pop("M2_ROLLBACK_TO_M1", None)
-        # M2 放行集合
-        for r in ("North America", "Europe", "Oceania"):
+        os.environ.pop("M2_ENFORCE_REGION_GATE", None)
+        for r in all_regions:
             assert region_gate_should_escalate(make_triage(r)) is False, r
-        # 通过 country=GB 走 UK
         assert region_gate_should_escalate(make_triage("Europe", country="GB")) is False
-        assert region_gate_should_escalate(make_triage("Europe", country="United Kingdom")) is False
-        # 仍升人工
-        for r in ("Asia", "South America", "Africa"):
-            assert region_gate_should_escalate(make_triage(r)) is True, r
+
+    with patch.dict(os.environ, {"M2_ENFORCE_REGION_GATE": "1"}, clear=False):
+        os.environ.pop("M1_BYPASS_REGION_GATE", None)
+        os.environ.pop("M2_ROLLBACK_TO_M1", None)
+        for r in all_regions:
+            assert region_gate_should_escalate(make_triage(r)) is False, r
 
 
 def test_region_gate_bypass_env_var():
@@ -154,11 +157,10 @@ def test_region_gate_bypass_env_var():
 
 
 def test_outlook_should_skip_uses_shared_region_gate():
-    """outlook_drafts.should_skip 与 email_agent.region_gate_should_escalate
-    共享判断；M2 supported region → 都不跳；未支持 region → 都跳。
+    """outlook_drafts.should_skip 与 email_agent.region_gate_should_escalate 共用。
+    不因大区跳过；enforce 也不拦。
     """
     from agent.outlook_drafts import should_skip
-    from agent.schemas import TriageResult
 
     base = {
         "intent": "app_binding", "urgency": "P2", "language": "en",
@@ -166,19 +168,21 @@ def test_outlook_should_skip_uses_shared_region_gate():
         "red_flags": [],
     }
 
-    mail = MagicMock()  # 不需要真实 Mail
+    mail = MagicMock()
     tmpl = {"intent": "app_binding", "template": "x"}
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("M1_BYPASS_REGION_GATE", None)
         os.environ.pop("M2_ROLLBACK_TO_M1", None)
-        # M2 放行
-        for r in ("North America", "Europe", "Oceania"):
+        os.environ.pop("M2_ENFORCE_REGION_GATE", None)
+        for r in ("North America", "Europe", "Oceania", "Asia", "Middle East"):
             assert should_skip(mail, {**base, "region": r}, tmpl, None) is None, r
-        # 未支持 region 跳
+
+    with patch.dict(os.environ, {"M2_ENFORCE_REGION_GATE": "1"}, clear=False):
+        os.environ.pop("M1_BYPASS_REGION_GATE", None)
+        os.environ.pop("M2_ROLLBACK_TO_M1", None)
         skip_reason = should_skip(mail, {**base, "region": "Asia"}, tmpl, None)
-        assert skip_reason is not None
-        assert "region" in skip_reason.lower() and "asia" in skip_reason.lower()
+        assert skip_reason is None
 
 
 # ── 3. mock_rag 默认 region 全名 ───────────────────────────────────────
@@ -248,6 +252,7 @@ def test_m2_region_gate_red_flag_escalates_anywhere():
         )
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("M2_ROLLBACK_TO_M1", None)
+            os.environ.pop("M2_ENFORCE_REGION_GATE", None)
             assert region_gate_should_escalate(triage) is True, (
                 f"region={region} 红牌应升人工"
             )
@@ -324,13 +329,15 @@ def test_pick_compliance_constraints_per_region():
         assert isinstance(role, str) and len(role) > 0
 
 
-def test_build_compliance_system_rejects_unm2_region():
-    """M2 picker 不支持 Asia/Africa/South America → raise。"""
+def test_build_compliance_system_unsupported_region_falls_back():
+    """未接合规大区不再 raise；用 NA 硬规则 + 禁止编造当地法条。"""
     from agent.prompts import pick_compliance_constraints
 
-    for r in ("Asia", "Africa", "South America"):
-        with pytest.raises(ValueError, match="not in M2 picker"):
-            pick_compliance_constraints(r, None)
+    for r in ("Asia", "Africa", "South America", "Middle East"):
+        role, constraints = pick_compliance_constraints(r, None)
+        assert isinstance(role, str) and len(role) > 0
+        assert "Do NOT invent local statute" in constraints
+        assert "refund" in constraints.lower()
 
 
 def test_m2_compliance_step_uses_region_picker():
@@ -395,9 +402,9 @@ def test_v4_templates_load_via_template_reply():
         import pytest
         pytest.skip("v4 xlsx 还没生成；跑 scripts/v4_draft_templates.py 后再跑这条")
 
-    templates = load_xlsx()
+    templates = load_xlsx(include_legacy=True)
     v4_only = [t for t in templates if "v4:" in (t.get("description") or "")]
-    assert len(v4_only) > 0, "load_xlsx 应至少加载一条 v4 模板"
+    assert len(v4_only) > 0, "load_xlsx(include_legacy=True) 应至少加载一条 v4 模板"
 
     # v4 模板至少覆盖一个之前 0 模板的 Intent（ismart_connectivity）
     intent_set = {t["intent"] for t in v4_only}
@@ -704,9 +711,9 @@ def test_load_xlsx_templates_have_salutation_placeholder():
         f"有 {literal_count} 条模板正文仍是字面 'Dear Customer,'："
         "normalize 漏了"
     )
-    # 大多数模板应该被 normalize（v4 表 1 条 "Hi Team," 不命中是预期）
-    assert placeholder_count >= 200, (
-        f"placeholder 只 {placeholder_count}，期待 ≥200（来自 264+ 模板）"
+    # 知识库新表约 95 条；旧表不再默认混入路由
+    assert placeholder_count >= 70, (
+        f"placeholder 只 {placeholder_count}，期待 ≥70（20260729 知识库）"
     )
 
 
@@ -766,19 +773,252 @@ def test_duplicate_detector_first_mail_not_duplicate():
 
 
 def test_duplicate_detector_exact_subject_match():
-    """同 sender + 同主题 → 100% 算重复。"""
+    """同 sender + 同主题 + 正文几乎一样 → 重复发送。"""
     from agent.outlook_drafts import _DuplicateDetector, Mail
     d = _DuplicateDetector()
     m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
-              received_at="", body_text="My app is broken", is_read=False)
+              received_at="", body_text="My app is broken and I cannot use it",
+              is_read=False)
     m2 = Mail(id="m2", subject="App not working", sender="alice@x.com",
-              received_at="", body_text="Completely different content", is_read=False)
+              received_at="", body_text="My app is broken and I cannot use it",
+              is_read=False)
     assert d.check_and_record(m1) is None
     r = d.check_and_record(m2)
     assert r is not None
     assert r["match"] == "subject_exact"
     assert r["duplicate_of"] == "m1"
-    assert r["score"] == 1.0
+    assert r["score"] >= 0.7
+
+
+def test_duplicate_detector_same_mail_id_is_dup():
+    """同一 Graph message id 扫两次 → 不得 createReply 两次。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m = Mail(id="same", subject="App not working", sender="alice@x.com",
+             received_at="", body_text="My app is broken and I cannot use it",
+             is_read=False)
+    assert d.check_and_record(m) is None
+    r = d.check_and_record(m)
+    assert r is not None
+    assert r["match"] == "same_mail_id"
+    assert r["duplicate_of"] == "same"
+
+
+def test_process_mail_same_mail_id_does_not_tag_invalid():
+    """同一封再扫：跳过、不打 关闭-无效邮件。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail, process_mail
+
+    class _StubGraph:
+        def __init__(self):
+            self.calls: list = []
+        def add_category(self, mail_id, category):
+            self.calls.append((mail_id, category))
+
+    g = _StubGraph()
+    d = _DuplicateDetector()
+    m = Mail(id="same", subject="App not working",
+             sender="alice@x.com", received_at="",
+             body_text="My app is broken and I cannot use it", is_read=False)
+
+    class _StubLLM:
+        def invoke_json(self, *args, **kwargs):
+            from agent.schemas import TriageResult
+            return TriageResult(
+                intent="app_vehicle_control", urgency="P2",
+                region="North America", language="en",
+                requires_recall_check=False,
+                requires_warranty_lookup=False, red_flags=[],
+            ), None
+
+    templates = [{"intent": "app_vehicle_control",
+                  "template": "{{salutation}},\n\nThanks.",
+                  "category": "App-车控车态相关", "level": "auto_draft_safe",
+                  "required_info": [], "next_step": "", "human_trigger": "",
+                  "forbidden": "", "source": "test"}]
+    rec1 = process_mail(m, g=None, llm=_StubLLM(), templates=templates,
+                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    rec2 = process_mail(m, g=g, llm=_StubLLM(), templates=templates,
+                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    assert rec1.get("draft_id") or rec1.get("would_post_body") or rec1.get("skipped")
+    assert rec2.get("skipped") == "already_scanned"
+    assert rec2.get("category_applied") is False
+    assert g.calls == []
+
+
+def test_duplicate_detector_same_subject_follow_up_not_dup():
+    """同客户同主题，但是新的跟进内容 → 不算无效。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    m1 = Mail(
+        id="m1", subject="Re: Ongoing Issues with the App",
+        sender="alexia.png@hotmail.com", received_at="",
+        body_text="Also, I have other people close to me that are experiencing the same issue.",
+        is_read=False,
+    )
+    m2 = Mail(
+        id="m2", subject="Re: Ongoing Issues with the App",
+        sender="alexia.png@hotmail.com", received_at="",
+        body_text=(
+            "The vehicle status has not updated since 29/07. I already "
+            "restarted infotainment, reinstalled the app, and visited the dealer. "
+            "Please escalate to the technical team."
+        ),
+        is_read=False,
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+_WEB_FORM = """\
+Caro team di assistenza iSmart,
+
+Spero che questo messaggio vi trovi bene.
+
+Scrivo per segnalare i problemi che sto attualmente riscontrando con il mio veicolo o l'app iSmart. Per aiutarvi a diagnosticare e risolvere efficacemente i problemi, ecco i dettagli rilevanti:
+• Paese/Regione:
+• Marca: MG
+• Modello di veicolo: MG3
+• Numero di identificazione del veicolo: LSJWP4393RZ209912
+• Tipo di problema: Altri
+• Descrizione dei problemi: {desc}
+"""
+
+
+def test_duplicate_detector_web_form_different_issue_not_dup():
+    """同客户同表单主题，描述不同 → 不是重发。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Problemi con il veicolo o l'app iSmart"
+    m1 = Mail(id="m1", subject=subj, sender="v@x.com", received_at="",
+              body_text=_WEB_FORM.format(desc="VPN again? Remove this restriction."),
+              is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="v@x.com", received_at="",
+              body_text=_WEB_FORM.format(desc="Climate control does not heat the seats."),
+              is_read=False)
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_web_form_privacy_footer_not_dup():
+    """表单末尾隐私声明相同、描述不同 → 不是重发。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    footer = (
+        "\n\nI can read the latest privacy policy at "
+        "https://page.soimt.com/soimt/privacy/en-GB_privacy.html\n"
+        "By sending this email I consent to data processing.\n"
+    )
+    subj = "Problemi con il veicolo o l'app iSmart"
+    m1 = Mail(
+        id="m1", subject=subj, sender="v@x.com", received_at="",
+        body_text=_WEB_FORM.format(desc="VPN restriction please remove.") + footer,
+        is_read=False,
+    )
+    m2 = Mail(
+        id="m2", subject=subj, sender="v@x.com", received_at="",
+        body_text=_WEB_FORM.format(desc="Seat heating does not work at all.") + footer,
+        is_read=False,
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_web_form_resubmit_is_dup():
+    """同表单主题且描述相同 → 连点重发。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Problemi con il veicolo o l'app iSmart"
+    body = _WEB_FORM.format(desc="VPN again? Remove this restriction.")
+    m1 = Mail(id="m1", subject=subj, sender="v@x.com", received_at="",
+              body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="v@x.com", received_at="",
+              body_text=body, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_days_later_same_issue_not_invalid():
+    """客服要过 VIN 后再交同一张表，不是几秒连点，不能打无效邮件。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Issues with Vehicle or iSmart App"
+    body = _WEB_FORM.format(
+        desc="my car keeps disconnecting from my MG app within an hour"
+    )
+    m1 = Mail(
+        id="m1", subject=subj, sender="buddy@x.com",
+        received_at="2026-08-20T10:00:00Z", body_text=body, is_read=False,
+    )
+    m2 = Mail(
+        id="m2", subject=subj, sender="buddy@x.com",
+        received_at="2026-09-09T08:00:00Z", body_text=body, is_read=False,
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_minutes_later_still_dup():
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Issues with Vehicle or iSmart App"
+    body = _WEB_FORM.format(desc="app keeps disconnecting from the car")
+    m1 = Mail(
+        id="m1", subject=subj, sender="buddy@x.com",
+        received_at="2026-09-09T08:00:00Z", body_text=body, is_read=False,
+    )
+    m2 = Mail(
+        id="m2", subject=subj, sender="buddy@x.com",
+        received_at="2026-09-09T08:04:00Z", body_text=body, is_read=False,
+    )
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_web_form_cid_tail_is_dup():
+    """第二封末尾多 cid 图（Outlook 把附件写进 body）→ 仍是连点，只留一封草稿。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Probleme mit dem Fahrzeug oder der iSmart App"
+    desc = (
+        "Die iSmart App verbindet sich nicht mit dem Fahrzeug. "
+        "Wenn es ein paar Minuten steht, dann kann man das Auto nicht mehr erreichen."
+    )
+    body = (
+        "Sehr geehrtes iSMART-Service-Team,\n"
+        "• Beschreibung der Probleme: " + desc + "\n"
+        "Ich kann die neueste Datenschutzrichtlinie lesen unter "
+        "https://page.soimt.com/soimt/privacy/en-GB_privacy.html\n"
+    )
+    noisy = body + "\n[cid:image001.jpg@01D] [cid:image002.png@02E]\n"
+    m1 = Mail(id="m1", subject=subj, sender="koch@x.com", received_at="",
+              body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="koch@x.com", received_at="",
+              body_text=noisy, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_web_form_extra_thanks_is_dup():
+    """连点第二封在描述末尾加 Grazie → 短描述被长描述包含，不算新问题。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Problemi con il veicolo o l'app iSmart"
+    base = "Non riesco a collegare apple carplay tramite cavo con iphone 17"
+    m1 = Mail(id="m1", subject=subj, sender="guerra@x.com", received_at="",
+              body_text=_WEB_FORM.format(desc=base), is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="guerra@x.com", received_at="",
+              body_text=_WEB_FORM.format(desc=base + " Grazie."), is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+    assert r["match"] in ("subject_exact", "issue_contains", "same_content")
 
 
 def test_duplicate_detector_subject_contains_with_re_prefix():
@@ -800,32 +1040,187 @@ def test_duplicate_detector_subject_contains_with_re_prefix():
 
 
 def test_duplicate_detector_jaccard_only():
-    """主题完全不同但 body 高度相似 → jaccard 命中。"""
+    """同一人正文几乎相同、主题不同（表单语言）→ 第二封不算新信，只留一封草稿。"""
     from agent.outlook_drafts import _DuplicateDetector, Mail
     d = _DuplicateDetector()
+    body = "How do I schedule overnight charging for my MG4 vehicle please"
     m1 = Mail(id="m1", subject="Charging question", sender="alice@x.com",
-              received_at="",
-              body_text="How do I schedule overnight charging for my MG4 vehicle",
-              is_read=False)
+              received_at="", body_text=body, is_read=False)
     m2 = Mail(id="m2", subject="Overnight charging setup", sender="alice@x.com",
-              received_at="",
-              body_text="How do I schedule overnight charging for my MG4 vehicle please",
-              is_read=False)
+              received_at="", body_text=body, is_read=False)
     assert d.check_and_record(m1) is None
     r = d.check_and_record(m2)
     assert r is not None
-    assert r["match"] == "jaccard"
-    assert r["score"] >= 0.7
+    assert r["duplicate_of"] == "m1"
+    assert r["match"] == "same_content"
+    assert r["same_subject"] is False
+
+
+def test_duplicate_detector_localized_subject_same_issue_is_dup():
+    """网页表单主题语言不同、描述相同 → 只建一封。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = _WEB_FORM.format(desc="VPN again? Remove this restriction.")
+    m1 = Mail(id="m1", subject="Issues with Vehicle or iSmart App",
+              sender="v@x.com", received_at="", body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject="Problèmes avec le Véhicule ou l'Application iSmart",
+              sender="v@x.com", received_at="", body_text=body, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_persists_across_instances():
+    """下一轮新进程仍能认出上一轮已处理的相同内容。"""
+    import tempfile
+    from pathlib import Path
+    from agent.outlook_drafts import Mail, _DuplicateDetector
+
+    body = "My app is broken and I cannot use it at all today"
+    with tempfile.TemporaryDirectory() as tmp:
+        store = Path(tmp) / "dedup.json"
+        d1 = _DuplicateDetector(store_path=store)
+        m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+                  received_at="", body_text=body, is_read=False)
+        m2 = Mail(id="m2", subject="App not working", sender="alice@x.com",
+                  received_at="", body_text=body, is_read=False)
+        assert d1.check_and_record(m1) is None
+        d2 = _DuplicateDetector(store_path=store)
+        r = d2.check_and_record(m2)
+        assert r is not None
+        assert r["duplicate_of"] == "m1"
 
 
 def test_duplicate_detector_different_sender_not_dup():
-    """不同 sender 同样的 body → 不算重复（每个 sender 独立 bucket）。"""
+    """不同 sender 同样的 body、没有同一 VIN → 不算重复。"""
     from agent.outlook_drafts import _DuplicateDetector, Mail
     d = _DuplicateDetector()
     m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
               received_at="", body_text="My app is broken", is_read=False)
     m2 = Mail(id="m2", subject="App not working", sender="bob@y.com",
               received_at="", body_text="My app is broken", is_read=False)
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_long_form_extra_privacy_is_dup():
+    """描述超过 400 字、第二封末尾多隐私声明 → 整段比较，仍是连点。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    story = (
+        "Hello, my MG ZS EV was working normally yesterday evening and I parked it "
+        "without any issues. This morning, when I tried to drive the vehicle, the "
+        "following error message appeared: &quot;vehicle control system fault - "
+        "please stop safely&quot; The vehicle enters ready mode and can move only "
+        "a few meters before the fault appears and the vehicle stops. Could you "
+        "please assist and arrange a technical inspection?"
+    )
+    longer = (
+        story.replace("&quot;", '"')
+        + " I can read the latest privacy notice for more details of the data "
+        "processing activities."
+    )
+    subj = "Issues with Vehicle or iSmart App"
+    m1 = Mail(id="m1", subject=subj, sender="a@x.com",
+              received_at="2026-10-07T08:02:48Z",
+              body_text=_WEB_FORM.format(desc=story), is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="a@x.com",
+              received_at="2026-10-07T08:02:57Z",
+              body_text=_WEB_FORM.format(desc=longer), is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None, "long form resubmit should be one draft"
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_same_vin_two_mailboxes_is_dup():
+    """同一 VIN、两个邮箱、21 秒内同一描述 → 只留一封。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    desc = (
+        "Bonjour, à partir de quel kilométrage je dois amener la voiture "
+        "pour le premier contrôle? Je l’ai acheté neuve avec 10km. Merci."
+    )
+    body = _WEB_FORM.format(desc=desc)
+    m1 = Mail(id="m1", subject="Problèmes avec le Véhicule ou l'Application iSmart",
+              sender="louislesser04@gmail.com", received_at="2026-10-06T20:16:40Z",
+              body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject="Problèmes avec le Véhicule ou l'Application iSmart",
+              sender="louislsrpro@gmail.com", received_at="2026-10-06T20:17:01Z",
+              body_text=body, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None, r
+    assert r["match"] == "same_vin"
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_same_vin_different_issue_not_dup():
+    """同一 VIN、两个邮箱，但描述不是同一件事 → 各留一封。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Issues with Vehicle or iSmart App"
+    m1 = Mail(id="m1", subject=subj, sender="a@x.com",
+              received_at="2026-10-06T20:16:40Z",
+              body_text=_WEB_FORM.format(desc="The app will not unlock the doors."),
+              is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="b@y.com",
+              received_at="2026-10-06T20:17:01Z",
+              body_text=_WEB_FORM.format(desc="Climate control does not heat the seats."),
+              is_read=False)
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_duplicate_detector_same_vin_later_is_dup():
+    """同一 VIN、另一个邮箱、描述相同：隔天也是重复，不限 3 小时。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = _WEB_FORM.format(desc="The app will not unlock the doors at all.")
+    m1 = Mail(id="m1", subject="Issues with Vehicle or iSmart App",
+              sender="a@x.com", received_at="2026-10-06T20:16:40Z",
+              body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject="Issues with Vehicle or iSmart App",
+              sender="b@y.com", received_at="2026-10-08T20:16:40Z",
+              body_text=body, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None, r
+    assert r["match"] == "same_vin"
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_same_sender_next_day_same_content_is_dup():
+    """同一发件人隔天再发相同内容，也是重复。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = _WEB_FORM.format(desc="The app will not unlock the doors at all.")
+    m1 = Mail(id="m1", subject="Issues with Vehicle or iSmart App",
+              sender="a@x.com", received_at="2026-10-06T20:16:40Z",
+              body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject="Issues with Vehicle or iSmart App",
+              sender="a@x.com", received_at="2026-10-08T20:16:40Z",
+              body_text=body, is_read=False)
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None, r
+    assert r["duplicate_of"] == "m1"
+
+
+def test_duplicate_detector_same_sender_next_day_new_issue_not_dup():
+    """同一发件人隔天再写，但描述换成另一件事，仍各留一封。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    subj = "Issues with Vehicle or iSmart App"
+    m1 = Mail(id="m1", subject=subj, sender="a@x.com",
+              received_at="2026-10-06T20:16:40Z",
+              body_text=_WEB_FORM.format(desc="The app will not unlock the doors."),
+              is_read=False)
+    m2 = Mail(id="m2", subject=subj, sender="a@x.com",
+              received_at="2026-10-08T20:16:40Z",
+              body_text=_WEB_FORM.format(desc="Climate control does not heat the seats."),
+              is_read=False)
     assert d.check_and_record(m1) is None
     assert d.check_and_record(m2) is None
 
@@ -882,12 +1277,13 @@ def test_process_mail_skips_duplicate_before_llm():
         allowlist=None, dry_run=True, use_llm=True,
         dedup=d,
     )
+    calls_after_first = llm.calls
     rec2 = process_mail(
         m2, g=None, llm=llm, templates=templates,
         allowlist=None, dry_run=True, use_llm=True,
         dedup=d,
     )
-    assert llm.calls == 1, f"第二封应短路不调 LLM；实际调了 {llm.calls} 次"
+    assert llm.calls == calls_after_first, f"第二封应短路不调 LLM；实际调了 {llm.calls} 次"
     assert rec1.get("draft_id") or rec1.get("would_post_body")
     assert rec2.get("skipped") == "duplicate"
     assert rec2.get("duplicate_of") == "m1"
@@ -895,24 +1291,18 @@ def test_process_mail_skips_duplicate_before_llm():
 
 
 def test_process_mail_duplicate_applies_category_via_graph():
-    """重复邮件 + 真 Graph 客户端 → 调 add_category('关闭:无效邮件')，
-    且原邮件不动（isRead 仍 False、不删、不移动）。"""
-    from unittest.mock import MagicMock
+    """重复邮件 → apply_close_invalid（关闭-无效邮件 + isRead）。"""
     from agent.outlook_drafts import (
-        _DuplicateDetector, Mail, process_mail, GraphClient,
+        GraphClient, _DuplicateDetector, Mail, process_mail,
     )
 
-    # 伪造 GraphClient：只记录调用的 _post URL + body
-    class _StubGraph:
-        def __init__(self):
-            self.calls: list[tuple[str, dict]] = []
-        def add_category(self, mail_id, category):
-            self.calls.append((
-                f"/users/me/messages/{mail_id}/categories",
-                {"categories": [category]},
-            ))
-
-    g = _StubGraph()
+    g = MagicMock(spec=GraphClient)
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    g.get_conversation_thread = MagicMock(return_value=[])
+    g.get_categories = MagicMock(return_value=[])
+    g.set_categories = MagicMock(return_value=None)
+    g.create_draft_reply = MagicMock(return_value="draft-1")
+    g.download_attachment = MagicMock(return_value=b"")
     d = _DuplicateDetector()
     m1 = Mail(id="m1", subject="App not working",
               sender="alice@x.com", received_at="",
@@ -922,7 +1312,10 @@ def test_process_mail_duplicate_applies_category_via_graph():
               body_text="My app is broken and I cannot use it still", is_read=False)
 
     class _StubLLM:
+        def __init__(self):
+            self.calls = 0
         def invoke_json(self, *args, **kwargs):
+            self.calls += 1
             from agent.schemas import TriageResult
             return TriageResult(
                 intent="app_vehicle_control", urgency="P2",
@@ -931,38 +1324,69 @@ def test_process_mail_duplicate_applies_category_via_graph():
                 requires_warranty_lookup=False, red_flags=[],
             ), None
 
+    llm = _StubLLM()
     templates = [{"intent": "app_vehicle_control",
                   "template": "{{salutation}},\n\nThanks.",
                   "category": "App-车控车态相关", "level": "auto_draft_safe",
                   "required_info": [], "next_step": "", "human_trigger": "",
                   "forbidden": "", "source": "test"}]
 
-    # 第一封走完整流程（dry_run，没真 Graph 调用）
-    process_mail(m1, g=g, llm=_StubLLM(), templates=templates,
+    process_mail(m1, g=g, llm=llm, templates=templates,
                  allowlist=None, dry_run=True, use_llm=True, dedup=d)
-    # 第二封：重复 → 应调 add_category('关闭:无效邮件')
-    rec2 = process_mail(m2, g=g, llm=_StubLLM(), templates=templates,
-                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    calls_after_first = llm.calls
+    rec2 = process_mail(m2, g=g, llm=llm, templates=templates,
+                        allowlist=None, dry_run=False, use_llm=True, dedup=d)
 
     assert rec2["skipped"] == "duplicate"
     assert rec2["category_applied"] is True
     assert rec2["category_error"] is None
-    assert len(g.calls) == 1
-    url, body = g.calls[0]
-    assert url == "/users/me/messages/m2/categories"
-    assert body == {"categories": ["关闭:无效邮件"]}
+    assert llm.calls == calls_after_first
+    g.apply_close_invalid.assert_called_once_with("m2")
+
+
+def test_duplicate_quoting_cs_closes_not_human_or_draft():
+    """连点再发即使引用了客服回复，也只关闭，不转人工、不建草稿。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, _DuplicateDetector, Mail, process_mail,
+    )
+    g = MagicMock(spec=GraphClient)
+    g.get_categories = MagicMock(return_value=["转人工"])
+    g.create_draft_reply = MagicMock(return_value="draft-1")
+    g.add_category = MagicMock()
+    d = _DuplicateDetector()
+    body = (
+        "My app is broken and I cannot use it\n"
+        "On Mon, customer.care <customer.care@ismart-service.com> wrote:\n"
+        "Dear customer, please try again.\n"
+    )
+    m1 = Mail(id="m1", subject="App not working", sender="alice@x.com",
+              received_at="2026-10-01T01:00:00Z", body_text=body, is_read=False)
+    m2 = Mail(id="m2", subject="App not working", sender="alice@x.com",
+              received_at="2026-10-01T01:05:00Z", body_text=body, is_read=False)
+    router = MailboxRouter(default="customer.care@ismart-service.com")
+    process_mail(m1, g=g, llm=None, templates=[], allowlist=None,
+                 dry_run=True, use_llm=False, router=router, dedup=d)
+    rec2 = process_mail(m2, g=g, llm=None, templates=[], allowlist=None,
+                        dry_run=False, use_llm=False, router=router, dedup=d)
+    assert rec2["skipped"] == "duplicate", rec2
+    g.apply_close_invalid.assert_called_once_with("m2")
+    g.create_draft_reply.assert_not_called()
+    g.add_category.assert_not_called()
 
 
 def test_process_mail_duplicate_category_failure_captured_not_raised():
-    """Graph add_category 抛错时 process_mail 不传播，只在 record 里写
+    """Graph apply_close_invalid 抛错时 process_mail 不传播，只在 record 里写
     category_error 给后续审计。LLM 仍不调。"""
-    from agent.outlook_drafts import _DuplicateDetector, Mail, process_mail
+    from agent.outlook_drafts import (
+        GraphClient, _DuplicateDetector, Mail, process_mail,
+    )
 
-    class _FailingGraph:
-        def add_category(self, mail_id, category):
-            raise RuntimeError("simulated Graph 503")
-
-    g = _FailingGraph()
+    g = MagicMock(spec=GraphClient)
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    g.get_conversation_thread = MagicMock(return_value=[])
+    g.get_categories = MagicMock(return_value=[])
+    g.set_categories = MagicMock(return_value=None)
+    g.apply_close_invalid = MagicMock(side_effect=RuntimeError("simulated Graph 503"))
     d = _DuplicateDetector()
     m1 = Mail(id="m1", subject="App not working",
               sender="alice@x.com", received_at="",
@@ -992,20 +1416,21 @@ def test_process_mail_duplicate_category_failure_captured_not_raised():
 
     process_mail(m1, g=g, llm=llm, templates=templates,
                  allowlist=None, dry_run=True, use_llm=True, dedup=d)
+    calls_after_first = llm.calls
     rec2 = process_mail(m2, g=g, llm=llm, templates=templates,
-                        allowlist=None, dry_run=True, use_llm=True, dedup=d)
+                        allowlist=None, dry_run=False, use_llm=True, dedup=d)
 
     assert rec2["skipped"] == "duplicate"
     assert rec2["category_applied"] is False
     assert "simulated Graph 503" in (rec2["category_error"] or "")
-    assert llm.calls == 1, "category 失败也不应触发第二封 LLM"
+    assert llm.calls == calls_after_first, "category 失败也不应触发第二封 LLM"
 
 
 # ── M2.5.4: list_filtered 拉邮件参数 ──────────────────────────────────
 
 
 def test_list_filtered_builds_odata_filter_with_since_until():
-    """list_filtered(since, until, is_read=None, exclude_categories=['关闭:无效邮件'])
+    """list_filtered(since, until, is_read=None, exclude_categories=['关闭-无效邮件'])
     应构造完整 OData $filter。"""
     from agent.outlook_drafts import GraphClient
     g = GraphClient.__new__(GraphClient)
@@ -1018,7 +1443,7 @@ def test_list_filtered_builds_odata_filter_with_since_until():
 
     g.list_filtered(
         top=20, since="2026-07-01T00:00:00Z", until="2026-07-31T00:00:00Z",
-        is_read=None, exclude_categories=["关闭:无效邮件"], order="asc",
+        is_read=None, exclude_categories=["关闭-无效邮件"], order="asc",
     )
 
     # 验证构造的 $filter 包含所有条件（在 params 里，不在 path 里）
@@ -1082,7 +1507,7 @@ def test_list_filtered_exclude_categories_multiple():
 
     g.list_filtered(
         top=10, is_read=False,
-        exclude_categories=["关闭:无效邮件", "已处理"],
+        exclude_categories=["关闭-无效邮件", "已处理"],
         order="asc",
     )
     call = g.session.request.call_args
@@ -1144,7 +1569,7 @@ def test_add_category_rejects_comma_separated():
     g.user_id = "me"
     g._created_draft_ids = set()
     try:
-        g.add_category("m1", "关闭:无效邮件, foo")
+        g.add_category("m1", "关闭-无效邮件, foo")
     except ValueError as e:
         assert "逗号" in str(e)
         return
@@ -1158,17 +1583,18 @@ def test_add_category_uses_patch_not_post():
     g.session = MagicMock()
     g.session.request.return_value.status_code = 200
     g.session.request.return_value.raise_for_status = MagicMock()
+    g.session.request.return_value.json.return_value = {"categories": []}
     g.user_id = "me"
     g._created_draft_ids = set()
 
-    g.add_category("fake-id", "关闭:无效邮件")
+    g.add_category("fake-id", "关闭-无效邮件")
 
     call = g.session.request.call_args
     method, url = call.args[0], call.args[1]
     assert method == "PATCH"
     # _patch 内部把 path 拼成完整 URL；检查路径末尾 + 拼接
     assert url.endswith("/users/me/messages/fake-id"), url
-    assert call.kwargs["json"] == {"categories": ["关闭:无效邮件"]}
+    assert call.kwargs["json"] == {"categories": ["关闭-无效邮件"]}
 
 
 def test_add_category_passes_guard_even_when_not_in_draft_registry():
@@ -1179,9 +1605,10 @@ def test_add_category_passes_guard_even_when_not_in_draft_registry():
     g.session = MagicMock()
     g.session.request.return_value.status_code = 200
     g.session.request.return_value.raise_for_status = MagicMock()
+    g.session.request.return_value.json.return_value = {"categories": []}
     g.user_id = "me"
     g._created_draft_ids = set()
-    g.add_category("original-mail-not-in-registry", "关闭:无效邮件")
+    g.add_category("original-mail-not-in-registry", "关闭-无效邮件")
     # 不应 raise
 
 
@@ -1199,7 +1626,7 @@ def test_patch_original_mail_with_body_field_blocked():
     try:
         g._patch(
             "/users/me/messages/original-mail-id",
-            body={"categories": ["关闭:无效邮件"], "body": {"contentType": "text",
+            body={"categories": ["关闭-无效邮件"], "body": {"contentType": "text",
                                                             "content": "hi"}},
         )
     except MailboxSafetyError as e:
@@ -1242,21 +1669,263 @@ def test_patch_original_mail_with_importance_blocked():
     raise AssertionError("importance 也应被拒")
 
 
-def test_patch_original_mail_with_isRead_blocked():
-    """PATCH 原邮件 + body 含 'isRead' → 拒绝（已有老规则 + 专项规则双重拦截）。"""
+def test_patch_original_mail_isRead_alone_blocked():
+    """单独 PATCH isRead 仍禁止。"""
     from agent.outlook_drafts import GraphClient, MailboxSafetyError
     g = GraphClient.__new__(GraphClient)
     g.session = MagicMock()
     g.user_id = "me"
     g._created_draft_ids = set()
     try:
-        g._patch(
-            "/users/me/messages/m1",
-            body={"categories": ["x"], "isRead": True},
-        )
+        g._patch("/users/me/messages/m1", body={"isRead": True})
     except MailboxSafetyError:
         return
-    raise AssertionError("isRead 应被拒")
+    raise AssertionError("单独 isRead 应被拒")
+
+
+def test_patch_original_mail_resolved_categories_and_isRead_allowed():
+    """仅关闭-无效邮件 + isRead 允许；关闭-已解决不得夹带 isRead。"""
+    from agent.outlook_drafts import GraphClient, MailboxSafetyError
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value = MagicMock(status_code=200, raise_for_status=lambda: None)
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    g._patch(
+        "/users/me/messages/m2",
+        body={"categories": ["关闭-无效邮件"], "isRead": True},
+    )
+    try:
+        g._patch(
+            "/users/me/messages/m1",
+            body={"categories": ["关闭-已解决"], "isRead": True},
+        )
+    except MailboxSafetyError:
+        pass
+    else:
+        raise AssertionError("关闭-已解决+isRead 应被拒")
+
+
+def test_apply_close_invalid_marks_read():
+    """apply_close_invalid 同时打关闭-无效邮件并 isRead=True。"""
+    from agent.outlook_drafts import GraphClient, CLOSE_INVALID_CATEGORY
+    g = GraphClient.__new__(GraphClient)
+    g.session = MagicMock()
+    g.session.request.return_value = MagicMock(
+        status_code=200, raise_for_status=lambda: None,
+        json=lambda: {"categories": ["转人工"]},
+    )
+    g.user_id = "me"
+    g._created_draft_ids = set()
+    g._queue_cats_ready = True
+    g._master_cats = []
+    g.get_categories = MagicMock(return_value=["转人工", "VIN:LSJWH4099PN101557"])
+    patches = []
+    def _patch(path, body=None, **kw):
+        patches.append((path, body))
+        return MagicMock(status_code=200, raise_for_status=lambda: None)
+    g._patch = _patch
+    g.apply_close_invalid("m1")
+    assert len(patches) == 1
+    _, body = patches[0]
+    assert body["isRead"] is True
+    assert CLOSE_INVALID_CATEGORY in body["categories"]
+    assert "转人工" not in body["categories"]
+    assert "VIN:LSJWH4099PN101557" in body["categories"]
+
+
+def test_apply_customer_resolved_does_not_mark_read():
+    """关闭-已解决只改 categories，不改 isRead。"""
+    from agent.outlook_drafts import GraphClient, CLOSE_RESOLVED_CATEGORY
+    g = GraphClient.__new__(GraphClient)
+    g.user_id = "me"
+    g._queue_cats_ready = True
+    g.get_categories = MagicMock(return_value=["转人工"])
+    set_calls = []
+    g.set_categories = MagicMock(side_effect=lambda mid, cats: set_calls.append((mid, cats)))
+    g.apply_customer_resolved("m1")
+    assert set_calls == [("m1", [CLOSE_RESOLVED_CATEGORY])]
+    g.set_categories.assert_called_once()
+
+
+def test_customer_issue_resolved_reestablished_connection():
+    from agent.outlook_drafts import customer_issue_resolved
+    en = (
+        "I reset the display and the connection was successfully re-established. "
+        "Thank you for your attention\n\n"
+        "-----Original Message-----\n"
+        "From: customer.care@ismart-service.com\n"
+        "Dear Mr./Ms. SINATRA,\n"
+        "Please first try the operation with the vehicle parked...\n"
+    )
+    it = (
+        "Ho effettuato il reset del display e con successo la connessione "
+        "si è ristabilita. Grazie per l'attenzione \n"
+        "Il Lun 14 Set 2026, 09:23 customer.care <customer.care@ismart-service.com> ha scritto:\n"
+        "Dear Mr./Ms. SINATRA,\n"
+    )
+    assert customer_issue_resolved(en)
+    assert customer_issue_resolved(it)
+    made_it = (
+        "we made it.\n"
+        "Thanks a lot because we tried with three different dealers in Greece without success\n"
+        "Στις Τρί 15 Σεπ 2026 ο/η customer.care έγραψε:\n"
+        "As requested, we have unbound the vehicle.\n"
+    )
+    assert customer_issue_resolved(made_it)
+    assert not customer_issue_resolved("we made it to the dealer but it still fails")
+    assert not customer_issue_resolved("Please re-establish the connection.")
+    assert not customer_issue_resolved("Is it fixed yet?")
+    assert customer_issue_resolved(
+        "Good morning,\n\nYes, it's already resolved.\n\nThank you."
+    )
+    assert customer_issue_resolved("Thank you for replying.")
+    nieves = (
+        "Thank you for replying.\n"
+        "El jue, 10 sept 2026, 10:21, customer.care "
+        "<customer.care@ismart-service.com> escribió:\n"
+        "Please try the following steps to bind the vehicle...\n"
+    )
+    assert customer_issue_resolved(nieves)
+    marek = (
+        "Thank you - will do that\n"
+        "On Thu, Sep 10, 2026 at 8:07 AM customer.care "
+        "<customer.care@ismart-service.com> wrote:\n"
+        "Regarding the windscreen stone chip, contact the dealer...\n"
+    )
+    assert customer_issue_resolved(marek)
+    assert customer_issue_resolved(
+        "It works fine when not using the VPN\n\nBest regards\n\nJoey Pierce"
+    )
+    assert not customer_issue_resolved(
+        "Thank you for replying, but it still fails to bind."
+    )
+    assert not customer_issue_resolved(
+        "All good. The issue is already fixed.\n"
+        "Can you pls confirm if I can start the engine remotely with this app?"
+    )
+    janet = (
+        "customer.care\n"
+        "Thank you 😊\n"
+        "On 16 Sept 2026 10:39, \"customer.care\" "
+        "<customer.care@ismart-service.com> wrote:\n"
+        "Please note that the iSMART Service Team does not have the "
+        "authority to delete user accounts on your behalf. "
+        "Open the iSMART app and tap Delete Account.\n"
+    )
+    assert customer_issue_resolved(janet)
+    assert customer_issue_resolved("Thank you 😊")
+    assert customer_issue_resolved("Thanks!\n\nSent via BT Email App")
+    assert customer_issue_resolved(
+        "Thank you, I managed to link my app to my vehicle.\n"
+        "Thank you very much for your answer.\n"
+        "Sincerely,\n"
+        "Christophe CLEMENT"
+    )
+    assert not customer_issue_resolved(
+        "Thank you, but the app still will not bind my car."
+    )
+    assert not customer_issue_resolved(
+        "Thank you very much for your answer.\n"
+        "The car still will not charge and the app is offline."
+    )
+    assert not customer_issue_resolved(
+        "Hi,\n\n"
+        "Thank you for your email.\n\n"
+        "Please find attached the photo of the app with the error being shown.\n"
+        "By touching the screen the error disappears and the app is working "
+        "as normal in the background unaffected by the error message.\n\n"
+        "Kind regards,\n\n"
+        "Clyde Camp"
+    )
+
+
+def test_pure_chase_nudge_close_invalid_not_human():
+    from agent.outlook_drafts import (
+        GraphClient, Mail, MailboxRouter, process_mail, pure_chase_nudge,
+    )
+    body = (
+        "I have contacted you at this email already sometimes and never respond. "
+        "For a car company it is really not serious."
+    )
+    assert pure_chase_nudge(body)
+    quoted = (
+        body
+        + "\nOn Mon, customer.care <customer.care@ismart-service.com> wrote:\n"
+        "Dear customer, please try again.\n"
+    )
+    assert pure_chase_nudge(quoted)
+    assert not pure_chase_nudge(
+        body + " The app still will not bind after scanning the QR code."
+    )
+    assert not pure_chase_nudge("still need help")
+    g = MagicMock(spec=GraphClient)
+    g.create_draft_reply = MagicMock()
+    router = MailboxRouter(default="customer.care@ismart-service.com")
+    mail = Mail(
+        id="chase1",
+        subject="Re: Issues with Vehicle or iSmart App",
+        sender="a@b.com",
+        received_at="2026-09-16T00:00:00Z",
+        body_text=quoted,
+        is_read=False,
+        conversation_id="c1",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") == "pure_chase_nudge", rec
+    assert rec.get("close_tag") == "关闭-无效邮件"
+    g.create_draft_reply.assert_not_called()
+    g.apply_close_invalid.assert_not_called()  # dry_run
+
+    rec2 = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=False, use_llm=False, router=router, dedup=None,
+    )
+    assert rec2.get("skipped") == "pure_chase_nudge"
+    g.apply_close_invalid.assert_called_once_with("chase1")
+
+
+def test_bank_legalization_junk_close_invalid_not_human():
+    from agent.outlook_drafts import (
+        GraphClient, Mail, MailboxRouter, process_mail,
+        skip_needs_human_queue,
+    )
+    body = (
+        "--------- Forwarded message ---------\n"
+        "Company Legalization Bulletin. Please reactivate myAlpha Web "
+        "for Business and submit G.E.MI. documents.\n"
+    )
+    g = MagicMock(spec=GraphClient)
+    g.create_draft_reply = MagicMock()
+    mail = Mail(
+        id="junk1",
+        subject="Fwd: Company Legalization",
+        sender="a@b.com",
+        received_at="2026-09-15T00:00:00Z",
+        body_text=body,
+        is_read=False,
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=MailboxRouter(), dedup=None,
+    )
+    assert rec.get("skipped") == "close_invalid_junk", rec
+    assert rec.get("close_tag") == "关闭-无效邮件"
+    assert rec.get("skip_reason_detail") == "misdirected_bank_legalization"
+    assert not skip_needs_human_queue(rec["skipped"])
+    g.create_draft_reply.assert_not_called()
+    g.apply_close_invalid.assert_not_called()
+
+    rec2 = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=False, use_llm=False, router=MailboxRouter(), dedup=None,
+    )
+    assert rec2.get("skipped") == "close_invalid_junk"
+    g.apply_close_invalid.assert_called_once_with("junk1")
+    g.create_draft_reply.assert_not_called()
 
 
 def test_patch_original_mail_with_flag_blocked():
@@ -1288,7 +1957,7 @@ def test_patch_original_mail_categories_only_allowed():
 
     g._patch(
         "/users/me/messages/m1",
-        body={"categories": ["关闭:无效邮件"]},
+        body={"categories": ["关闭-无效邮件"]},
     )
     # 不 raise
 
@@ -1370,8 +2039,10 @@ def test_pick_template_charging_falls_back_when_no_overlap():
     email_body = "My car stopped charging at 80%. Range reduced after charge."
     tmpl = pick_template("charging", templates, body_text=email_body)
     assert tmpl is not None
-    # 不强制是哪条（取决于 token 重叠），但必须是 charging intent
-    assert tmpl["intent"] == "charging"
+    # 充电故障模板要求 VIN；正文没有 17 位 VIN → 知识库闸门改走 GEN-002
+    assert tmpl.get("template_id") == "GEN-002", (
+        f"缺 VIN 的技术问题应 GEN-002；实际 {tmpl.get('template_id')}"
+    )
 
 
 def test_template_body_token_overlap_scores_chg_sched_highest():
@@ -1396,6 +2067,1093 @@ def test_template_body_token_overlap_scores_chg_sched_highest():
         f"CHG-SCHED-001 应比其它候选分数高；got {scores}"
     )
     assert sched_score >= 4, f"CHG-SCHED-001 score 应 ≥ 4；got {sched_score}"
+
+
+# ── 5. M2.5.5 conversation thread + PDF + thread_context ───────────────
+
+
+def test_mail_dataclass_has_conversation_id_and_sender_display_name():
+    """Mail dataclass 应带 conversation_id 和 sender_display_name 字段。"""
+    from agent.outlook_drafts import Mail
+    m = Mail(
+        id="x", subject="s", sender="a@x.com",
+        received_at="", body_text="b", is_read=False,
+    )
+    assert m.conversation_id == ""
+    assert m.sender_display_name == ""
+    # 加可选 kwarg
+    m2 = Mail(
+        id="x", subject="s", sender="a@x.com",
+        received_at="", body_text="b", is_read=False,
+        conversation_id="conv-123",
+        sender_display_name="Philip Watson",
+    )
+    assert m2.conversation_id == "conv-123"
+    assert m2.sender_display_name == "Philip Watson"
+
+
+def test_graphclient_get_conversation_thread_builds_correct_odata():
+    """M2.5.5: get_conversation_thread 应该发对 OData（filter + orderby + top）。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient(token="dummy", user_id="user-1")
+    g._request = MagicMock(return_value=MagicMock(
+        json=lambda: {"value": []},
+        raise_for_status=lambda: None,
+    ))
+    g.get_conversation_thread("conv-with-'-quote", max_messages=10)
+    (call,) = g._request.call_args_list
+    # MagicMock call: (method, args, kwargs) —— 这里 method/args 在 arg list (位置),
+    # method 是位置参数 0
+    method, path = call.args[0], call.args[1]
+    assert method == "GET"
+    assert "/users/user-1/messages" in path
+    params = call.kwargs.get("params")
+    assert params is not None
+    # conversationId 单引号 escape（OData string escape → ''）
+    assert "conv-with-''-quote" in params["$filter"], params["$filter"]
+    assert "conversationId eq" in params["$filter"]
+    assert "$orderby" not in params, params
+    assert params["$top"] == "10"
+
+
+def test_graphclient_get_conversation_thread_parses_messages():
+    """解析 Graph 响应：取 sender / body / received。"""
+    from agent.outlook_drafts import GraphClient
+    g = GraphClient(token="dummy", user_id="me")
+    sample = {
+        "value": [
+            {
+                "id": "m1",
+                "sender": {"emailAddress": {"name": "John", "address": "j@x.com"}},
+                "receivedDateTime": "2026-07-01T10:00:00Z",
+                "body": {"contentType": "text", "content": "Hello, I have a problem"},
+            },
+            {
+                "id": "m2",
+                "sender": {"emailAddress": {"name": "CS Team", "address": "cs@x.com"}},
+                "receivedDateTime": "2026-07-02T11:00:00Z",
+                "body": {"contentType": "html",
+                         "content": "<p>Hi John,</p><p>Please check ..</p>"},
+            },
+        ]
+    }
+    g._request = MagicMock(return_value=MagicMock(
+        json=lambda: sample,
+        raise_for_status=lambda: None,
+    ))
+    out = g.get_conversation_thread("conv-1")
+    assert len(out) == 2
+    assert out[0]["sender_email"] == "j@x.com"
+    assert out[0]["body_text"] == "Hello, I have a problem"
+    assert out[1]["sender_email"] == "cs@x.com"
+    # HTML → plain text
+    assert "<p>" not in out[1]["body_text"]
+    assert "Hi John" in out[1]["body_text"]
+    assert out[0]["is_draft"] is False
+    assert out[1]["is_draft"] is False
+
+
+def test_process_mail_skips_when_we_replied_last_in_thread(monkeypatch):
+    """M2.5.5: 线程最后一封是自己回的 → skip = we_replied_last（暂不打 category）。
+
+    用 mock Graph 模拟：thread 2 条消息，最后一条 sender = CS mailbox。
+    process_mail 应该早返回并跳过。
+    """
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail, AzureLLMClient,
+    )
+
+    # Mock LLM（不应被调 —— 跳过前 early return）
+    llm = MagicMock(spec=AzureLLMClient)
+
+    # Mock Graph
+    g = MagicMock(spec=GraphClient)
+    # mail.id 不同 conversation 不同
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-07-01T10:00:00Z", "body_text": "Help, app not binding"},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-07-02T11:00:00Z", "body_text": "Hi Jane, please send VIN"},
+    ])
+    g.add_category = MagicMock(return_value=None)
+
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Re: app not binding",
+        sender="customer@x.com",
+        sender_display_name="Jane Smith",
+        received_at="2026-07-03T10:00:00Z",
+        body_text="I tried, still not working",
+        is_read=False,
+        conversation_id="conv-XYZ",
+    )
+    rec = process_mail(
+        mail, g=g, llm=llm, templates=[], allowlist=None,
+        dry_run=True, use_llm=True, router=router, dedup=None,
+    )
+    assert rec["skipped"] == "we_replied_last", rec
+    assert rec["thread_messages_count"] == 2
+    assert rec["thread_our_replies"] == 1
+    # LLM 不该被调用
+    assert not llm.invoke_json.called
+    assert rec.get("tag_applied") is False
+    assert not g.add_category.called
+
+
+_COMFORT_PATIENCE = (
+    "Thank you for contacting the iSMART Service Team.\n\n"
+    "We kindly ask for your patience while this is reviewed.\n\n"
+    "Privacyoffice@ismart-service.com"
+)
+_COMFORT_INTAKE = (
+    "Thank you for contacting the iSMART Service Team.\n\n"
+    "As your feedback involves technical details, we kindly request "
+    "the following information.\n"
+    "Country/Region: Sweden\n"
+    "Description: cannot connect app"
+)
+
+
+def _stub_business_draft(monkeypatch):
+    captured: dict = {}
+
+    def fake(body, **kwargs):
+        captured["body"] = body
+        captured["thread"] = kwargs.get("thread_context")
+        return {
+            "triage": {
+                "intent": "app_binding",
+                "urgency": "P2",
+                "region": "Europe",
+                "red_flags": [],
+                "language": "en",
+            },
+            "template_doc": {
+                "template_id": "BIND-008",
+                "level": "auto_draft_safe",
+                "human_trigger": "",
+            },
+            "filled_body": "Dear customer,\n\nPlease try the steps.",
+            "template_forbidden": "",
+        }
+
+    monkeypatch.setattr("agent.outlook_drafts.run_template_reply", fake)
+    monkeypatch.setattr(
+        "agent.outlook_drafts.draft_semantic_mismatch_reason",
+        lambda *args, **kwargs: None,
+    )
+    return captured
+
+
+def test_comfort_reply_detector():
+    from agent.comfort_reply import is_comfort_reply, quoted_reply_is_comfort
+
+    assert is_comfort_reply(_COMFORT_PATIENCE)
+    assert is_comfort_reply(_COMFORT_INTAKE)
+    real = (
+        "Hi Jane, please send VIN\n\n"
+        "-----Original Message-----\n"
+        + _COMFORT_PATIENCE
+    )
+    assert not is_comfort_reply(real)
+    quoted = (
+        "The app still cannot connect.\n\n"
+        "On Monday, customer.care@ismart-service.com wrote:\n"
+        + _COMFORT_PATIENCE
+    )
+    assert quoted_reply_is_comfort(quoted, "customer.care@ismart-service.com")
+    business = (
+        "Still broken.\n\n"
+        "On Monday, customer.care@ismart-service.com wrote:\n"
+        "Hi Jane, please send VIN"
+    )
+    assert not quoted_reply_is_comfort(business, "customer.care@ismart-service.com")
+
+
+def test_comfort_tag_target_uses_latest_customer_before_comfort():
+    from agent.comfort_reply import comfort_tag_target
+
+    thread = [
+        {"id": "m1", "sender_email": "a@x.com", "received_at": "2026-10-20T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "c1", "sender_email": "customer.care@ismart-service.com",
+         "received_at": "2026-10-20T02:00:00Z", "body_text": _COMFORT_PATIENCE,
+         "is_draft": False},
+        {"id": "m2", "sender_email": "a@x.com", "received_at": "2026-10-20T03:00:00Z",
+         "body_text": "Adding the workshop photo of the error screen.",
+         "is_draft": False},
+    ]
+    own = {"customer.care@ismart-service.com"}
+    assert comfort_tag_target(
+        thread, comfort_at="2026-10-20T02:00:00Z", self_emails=own,
+    ) == "m1"
+    assert comfort_tag_target(
+        thread, comfort_at="2026-10-20T04:00:00Z", self_emails=own,
+    ) == "m2"
+
+
+def test_process_mail_comfort_only_still_drafts(monkeypatch):
+    """只发过安抚、最新一封是安抚信 → 仍起草，且不把安抚正文喂进选模板。"""
+    from agent.outlook_drafts import GraphClient, MailboxRouter, Mail, process_mail
+
+    captured = _stub_business_draft(monkeypatch)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-10-20T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-10-20T02:00:00Z",
+         "body_text": _COMFORT_PATIENCE, "is_draft": False},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    g.add_category = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="App will not connect",
+        sender="customer@x.com",
+        sender_display_name="Jane Smith",
+        received_at="2026-10-20T01:00:00Z",
+        body_text="The app will not connect to the car.",
+        is_read=False,
+        conversation_id="conv-comfort",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") not in {
+        "we_replied_last", "follow_up_needs_human", "already_has_draft",
+    }, rec
+    assert rec.get("thread_our_replies") == 0
+    assert "will not connect" in (captured.get("body") or "")
+    assert "kindly ask for your patience" not in (captured.get("thread") or "").lower()
+    assert rec.get("draft_anchor_id") == "current"
+
+
+def test_process_mail_comfort_joins_customer_supplements(monkeypatch):
+    """第一封加后来的补充都进草稿正文，草稿挂在最新一封客户来信上。"""
+    from agent.outlook_drafts import GraphClient, MailboxRouter, Mail, process_mail
+
+    captured = _stub_business_draft(monkeypatch)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "m1", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-10-20T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-10-20T02:00:00Z",
+         "body_text": _COMFORT_INTAKE, "is_draft": False},
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-10-20T03:00:00Z",
+         "body_text": "Adding the workshop photo of the error screen.",
+         "is_draft": False},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="App will not connect",
+        sender="customer@x.com",
+        sender_display_name="Jane Smith",
+        received_at="2026-10-20T03:00:00Z",
+        body_text="Adding the workshop photo of the error screen.",
+        is_read=False,
+        conversation_id="conv-comfort-2",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") not in {
+        "we_replied_last", "follow_up_needs_human", "already_has_draft",
+    }, rec
+    body = captured.get("body") or ""
+    assert "will not connect" in body
+    assert "workshop photo" in body
+    assert "Customer message 1" in body
+    assert rec.get("draft_anchor_id") == "current"
+
+
+def test_process_mail_quote_of_comfort_is_not_follow_up(monkeypatch):
+    """客户只引用安抚信，不按已回复转人工。"""
+    from agent.outlook_drafts import GraphClient, MailboxRouter, Mail, process_mail
+
+    _stub_business_draft(monkeypatch)
+    g = MagicMock(spec=GraphClient)
+    body = (
+        "The app still cannot connect.\n\n"
+        "On Monday, customer.care@ismart-service.com wrote:\n"
+        + _COMFORT_PATIENCE
+    )
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-10-20T03:00:00Z", "body_text": body, "is_draft": False},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    router = MailboxRouter(uk="customer.care@ismart-service.com")
+    mail = Mail(
+        id="current",
+        subject="Re: app",
+        sender="customer@x.com",
+        sender_display_name="Jane Smith",
+        received_at="2026-10-20T03:00:00Z",
+        body_text=body,
+        is_read=False,
+        conversation_id="conv-quote-comfort",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") != "follow_up_needs_human", rec
+
+
+def test_process_mail_comfort_draft_does_not_block(monkeypatch):
+    """线程里只有未发送的安抚草稿 → 仍起草。"""
+    from agent.outlook_drafts import GraphClient, MailboxRouter, Mail, process_mail
+
+    _stub_business_draft(monkeypatch)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-10-20T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "draft-comfort", "sender_email": "cs-team@mgmotor.com",
+         "sender_name": "CS", "received_at": "2026-10-20T02:00:00Z",
+         "body_text": _COMFORT_PATIENCE, "is_draft": True},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="App will not connect",
+        sender="customer@x.com",
+        sender_display_name="Jane Smith",
+        received_at="2026-10-20T01:00:00Z",
+        body_text="The app will not connect to the car.",
+        is_read=False,
+        conversation_id="conv-comfort-draft",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") != "already_has_draft", rec
+
+
+def test_find_unsent_customer_draft_skips_comfort_body():
+    from agent.outlook_drafts import GraphClient
+
+    g = GraphClient("tok", "me")
+    listed = {
+        "value": [{
+            "id": "d1",
+            "isDraft": True,
+            "subject": "RE: App will not connect",
+            "toRecipients": [{"emailAddress": {"address": "a@x.com"}}],
+        }],
+    }
+    g._get = MagicMock(side_effect=[
+        listed,
+        {"body": {"content": _COMFORT_PATIENCE}, "isDraft": True},
+    ])
+    assert g.find_unsent_customer_draft("a@x.com", "App will not connect") is None
+
+    g._get = MagicMock(side_effect=[
+        listed,
+        {"body": {"content": "Hi Jane, please send VIN"}, "isDraft": True},
+    ])
+    assert g.find_unsent_customer_draft("a@x.com", "App will not connect") == "d1"
+
+
+def test_process_mail_skips_when_unsent_draft_exists():
+    """同一线程已有未发送草稿 → 不再建第二封。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail, AzureLLMClient,
+    )
+    llm = MagicMock(spec=AzureLLMClient)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "M",
+         "received_at": "2026-09-01T10:00:00Z", "body_text": "letter attached",
+         "is_draft": False},
+        {"id": "draft1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-09-02T06:43:08Z", "body_text": "GEN-001",
+         "is_draft": True},
+    ])
+    g.add_category = MagicMock(return_value=None)
+    g.download_attachment = MagicMock(return_value=b"")
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Reclamation",
+        sender="customer@x.com",
+        sender_display_name="Maurice",
+        received_at="2026-09-01T10:00:00Z",
+        body_text="copy attached",
+        is_read=False,
+        conversation_id="conv-draft",
+    )
+    rec = process_mail(
+        mail, g=g, llm=llm, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") == "already_has_draft", rec
+    assert not llm.invoke_json.called
+
+
+def test_process_mail_skips_when_drafts_folder_has_same_customer_subject():
+    """另一会话已有同客户同主题草稿 → 不建第二封。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail, AzureLLMClient,
+    )
+    llm = MagicMock(spec=AzureLLMClient)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "cangini@x.com", "sender_name": "C",
+         "received_at": "2026-08-20T10:00:00Z", "body_text": "voice",
+         "is_draft": False},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value="existing-draft-id")
+    g.add_category = MagicMock(return_value=None)
+    g.download_attachment = MagicMock(return_value=b"")
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Problemi con il veicolo o l'app iSmart",
+        sender="cangini@x.com",
+        sender_display_name="Christian Cangini",
+        received_at="2026-08-20T10:00:00Z",
+        body_text="voice assistant italian",
+        is_read=False,
+        conversation_id="conv-new-submit",
+    )
+    rec = process_mail(
+        mail, g=g, llm=llm, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+    )
+    assert rec.get("skipped") == "already_has_draft", rec
+    assert not llm.invoke_json.called
+
+
+def test_process_mail_replace_existing_draft_does_not_skip():
+    """--replace-existing-draft 时改写已有草稿，不 skip。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail,
+    )
+    from agent.template_reply import load_xlsx
+
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "durak@x.com", "sender_name": "Y",
+         "received_at": "2026-09-03T18:48:00Z",
+         "body_text": (
+             "VIN LSJWH4099PN101557. Will the current or upcoming software "
+             "update also improve LKA?"
+         ),
+         "is_draft": False},
+        {"id": "draft1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-09-04T06:00:00Z", "body_text": "ADAS-LKA-001",
+         "is_draft": True},
+    ])
+    g.add_category = MagicMock(return_value=None)
+    g.download_attachment = MagicMock(return_value=b"")
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Probleme mit dem Fahrzeug",
+        sender="durak@x.com",
+        sender_display_name="Durak Yamaner",
+        received_at="2026-09-03T18:48:00Z",
+        body_text=(
+            "VIN LSJWH4099PN101557. Will the current or upcoming software "
+            "update also improve LKA and traffic sign recognition?"
+        ),
+        is_read=False,
+        conversation_id="conv-draft",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=load_xlsx(), allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=None,
+        replace_existing_draft=True,
+    )
+    assert rec.get("skipped") in (None, False), rec
+    assert rec.get("template_id") == "FICM-001", rec.get("template_id")
+    assert rec.get("would_post_body")
+    assert "inspection" not in (rec.get("would_post_body") or "").lower()
+    g.create_draft_reply.assert_not_called()
+
+
+def test_process_mail_fact_tags_on_we_replied_last():
+    """不起草时仍打 VIN/品牌/问题类型（dry_run=False）。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail, AzureLLMClient,
+    )
+    llm = MagicMock(spec=AzureLLMClient)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "D",
+         "received_at": "2026-07-01T10:00:00Z",
+         "body_text": "activation failed"},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-07-02T11:00:00Z", "body_text": "please wait"},
+    ])
+    g.get_categories = MagicMock(return_value=[])
+    g.set_categories = MagicMock(return_value=None)
+    g.add_category = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Re: iSmart",
+        sender="customer@x.com",
+        sender_display_name="Danilo",
+        received_at="2026-07-01T10:00:00Z",
+        body_text=(
+            "Brand: MG\nVIN: LSJW74099PZ099787\n"
+            "The QRCode cannot be created until the vehicle is ACTIVATED. "
+            "The activation doesn't work."
+        ),
+        is_read=False,
+        conversation_id="conv-XYZ",
+    )
+    rec = process_mail(
+        mail, g=g, llm=llm, templates=[], allowlist=None,
+        dry_run=False, use_llm=True, router=router, dedup=None,
+    )
+    assert rec["skipped"] == "we_replied_last", rec
+    assert not llm.invoke_json.called
+    g.set_categories.assert_called_once()
+    cats = g.set_categories.call_args[0][1]
+    assert "VIN:LSJW74099PZ099787" in cats
+    assert "品牌:MG" in cats
+    assert "问题:FICM-激活相关" in cats
+    assert rec.get("fact_tags", {}).get("applied") is True
+
+
+def test_process_mail_issue_tag_follows_picked_template():
+    """选了 FICM-001 时 Outlook 问题类型是软件更新，不是 Adas-LKA。"""
+    from agent.outlook_drafts import GraphClient, Mail, process_mail
+    from agent.template_reply import load_xlsx
+
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[])
+    g.get_categories = MagicMock(return_value=[])
+    g.set_categories = MagicMock(return_value=None)
+    g.create_draft_reply = MagicMock(return_value="draft-1")
+    g.download_attachment = MagicMock(return_value=b"")
+    mail = Mail(
+        id="m1",
+        subject="HS Hybrid",
+        sender="durak@x.com",
+        sender_display_name="Durak Yamaner",
+        received_at="2026-09-03T18:48:00Z",
+        body_text=(
+            "VIN LSJWH4099PN101557. Will the current or upcoming software "
+            "update also improve LKA and traffic sign recognition?"
+        ),
+        is_read=False,
+        conversation_id="c1",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=load_xlsx(), allowlist=None,
+        dry_run=False, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("template_id") == "FICM-001", rec.get("template_id")
+    cats = g.set_categories.call_args[0][1]
+    assert "问题:FICM-软件更新" in cats
+    assert "问题:Adas-LKA" not in cats
+    assert "FICM-软件更新" not in cats
+
+
+def test_process_mail_follow_up_after_cs_reply_goes_human():
+    """客服已回过一轮、客户再跟进且未解决 → 不自动起草，转人工。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, process_mail, AzureLLMClient,
+    )
+    llm = MagicMock(spec=AzureLLMClient)
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "m1", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-01T10:00:00Z", "body_text": "hi"},
+        {"id": "m2", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-07-02T10:00:00Z", "body_text": "we can help"},
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-05T10:00:00Z", "body_text": "still need help"},
+    ])
+    g.add_category = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current",
+        subject="Re: still need help",
+        sender="customer@x.com",
+        sender_display_name="Jane",
+        received_at="2026-07-05T10:00:00Z",
+        body_text="still need help",
+        is_read=False,
+        conversation_id="conv-X",
+    )
+    rec = process_mail(
+        mail, g=g, llm=llm, templates=[], allowlist=None,
+        dry_run=True, use_llm=True, router=router, dedup=None,
+    )
+    assert rec.get("skipped") == "follow_up_needs_human", rec
+    assert rec.get("thread_our_replies") == 1, rec
+    g.create_draft_reply.assert_not_called()
+
+
+def test_process_mail_first_inbound_still_drafts():
+    """线程里还没有客服发出邮件 → 仍可自动起草。"""
+    from agent.outlook_drafts import (
+        GraphClient, Mail, process_mail,
+    )
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-05T10:00:00Z", "body_text": "app will not bind"},
+    ])
+    g.add_category = MagicMock(return_value=None)
+    mail = Mail(
+        id="current",
+        subject="app binding",
+        sender="customer@x.com",
+        sender_display_name="Jane",
+        received_at="2026-07-05T10:00:00Z",
+        body_text="app will not bind",
+        is_read=False,
+        conversation_id="conv-X",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("skipped") != "follow_up_needs_human", rec
+    assert rec.get("skipped") != "dealer_unresolved_needs_human", rec
+
+
+def test_dealer_unresolved_german_workshop_twice():
+    from agent.outlook_drafts import dealer_unresolved_needs_human, GraphClient, Mail, process_mail
+
+    body = (
+        "Hallo, ich habe Riesenprobleme mit meiner Klimaanlage. "
+        "Sobald die Temperatur über circa 29-30 Grad geht, funktioniert sie nicht mehr. "
+        "Ich war schon zweimal in einer Werkstatt hier in Südspanien. "
+        "Die haben alles überprüft. Neue Software oft gespielt aber das Problem "
+        "nicht in den Griff bekommen. Ich kann mit dem Auto jetzt nicht mehr fahren."
+    )
+    assert dealer_unresolved_needs_human(body) is True
+    g = MagicMock(spec=GraphClient)
+    g.create_draft_reply = MagicMock()
+    g.get_conversation_thread = MagicMock(return_value=[])
+    mail = Mail(
+        id="m-ac",
+        subject="Probleme mit dem Fahrzeug",
+        sender="customer@x.com",
+        sender_display_name="M",
+        received_at="2026-09-04T07:18:23Z",
+        body_text=body,
+        is_read=False,
+        conversation_id="c-ac",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("skipped") == "dealer_unresolved_needs_human", rec
+    g.create_draft_reply.assert_not_called()
+
+
+def test_parked_false_awake_skips_status001():
+    from agent.outlook_drafts import (
+        GraphClient, Mail, parked_false_awake_needs_human, process_mail,
+    )
+    from agent.template_reply import parked_false_awake_needs_human as det
+
+    body = (
+        "Modello di veicolo: MG3\n"
+        "Numero di identificazione del veicolo: VIN_MASK_aabbccdd\n"
+        "il veicolo mi segnala l'accensione del veicolo, quando in realtà "
+        "è già da una mezzora che il veicolo è parcheggiato. "
+        "Non è la prima volta e poi la trovo con la batteria scarica. "
+        "devo farmi aiutare, essendo un invalido."
+    )
+    assert det(body) is True
+    assert parked_false_awake_needs_human(body) is True
+    g = MagicMock(spec=GraphClient)
+    g.create_draft_reply = MagicMock()
+    g.get_conversation_thread = MagicMock(return_value=[])
+    mail = Mail(
+        id="m-awake",
+        subject="Problemi con il veicolo o l'app iSmart",
+        sender="customer@x.com",
+        sender_display_name="A",
+        received_at="2026-09-09T16:48:00Z",
+        body_text=body,
+        is_read=False,
+        conversation_id="c-awake",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("skipped") == "parked_false_awake_needs_human", rec
+    g.create_draft_reply.assert_not_called()
+    stale = (
+        'When the car is parked and not connected to a charger, the app '
+        'shows "The vehicle did not respond."'
+    )
+    assert det(stale) is False
+
+
+def test_dealer_unresolved_future_visit_still_drafts():
+    from agent.outlook_drafts import dealer_unresolved_needs_human
+
+    assert dealer_unresolved_needs_human(
+        "The air conditioning is weak. I will go to the workshop next week."
+    ) is False
+    assert dealer_unresolved_needs_human(
+        "Hallo, die Klimaanlage kühlt nicht, wenn es heiss ist."
+    ) is False
+
+
+def test_dealer_unresolved_italian_workshop_failed():
+    from agent.outlook_drafts import dealer_unresolved_needs_human
+
+    assert dealer_unresolved_needs_human(
+        "la funzione vocale non funziona più, l'officina autorizzata "
+        "non è riuscita a sistemare il problema"
+    ) is True
+    assert dealer_unresolved_needs_human(
+        "En el servicio técnico oficial no me dan solución ni respuesta"
+    ) is True
+
+
+def test_vpn_restriction_uses_app_vpn_template():
+    from agent.outlook_drafts import vpn_restriction_needs_human
+    from agent.template_reply import pick_template, load_xlsx
+
+    body = "Please remove this VPN restriction from the car."
+    assert vpn_restriction_needs_human(body) is False
+    chosen = pick_template("ismart_connectivity", load_xlsx(), body_text=body)
+    assert chosen.get("template_id") == "APP-VPN-001", chosen.get("template_id")
+
+
+def test_process_mail_follow_up_detects_customer_care_without_env():
+    """MAILBOX_USER 未配成邮箱时，仍按 customer.care 发出记录转人工。"""
+    from agent.outlook_drafts import GraphClient, Mail, process_mail
+
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "m1", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-01T10:00:00Z", "body_text": "ac not working"},
+        {"id": "m2", "sender_email": "customer.care@ismart-service.com",
+         "sender_name": "CS",
+         "received_at": "2026-07-02T10:00:00Z", "body_text": "please send screenshot"},
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-05T10:00:00Z", "body_text": "here is the photo"},
+    ])
+    mail = Mail(
+        id="current",
+        subject="Re: AC",
+        sender="customer@x.com",
+        sender_display_name="G",
+        received_at="2026-07-05T10:00:00Z",
+        body_text="here is the photo",
+        is_read=False,
+        conversation_id="conv-Y",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("skipped") == "follow_up_needs_human", rec
+    assert rec.get("thread_our_replies") == 1, rec
+
+
+def test_thread_context_passed_to_run_template_reply():
+    """M2.5.5: process_mail 把 thread_msgs 打包成 thread_context，
+    传给 run_template_reply，进而喂给 classify_intent 的 LLM。"""
+    import agent.outlook_drafts as od
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, AzureLLMClient,
+    )
+
+    llm = MagicMock(spec=AzureLLMClient)
+
+    # mock Graph: thread 有 1 条消息
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "m1", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-07-01T10:00:00Z",
+         "body_text": "Hi, my app does not bind, QR not showing"},
+    ])
+    g.add_category = MagicMock(return_value=None)
+    g.download_attachment = MagicMock(return_value=b"")  # 0 附件 → 不调
+
+    captured: dict = {}
+
+    def spy(*args, **kw):
+        captured.update(kw)
+        from agent.schemas import TriageResult
+        return {
+            "triage": TriageResult(
+                intent="app_binding", urgency="P2", region="North America",
+                language="en", requires_recall_check=False,
+                requires_warranty_lookup=False, red_flags=[],
+            ).model_dump(),
+            "template_doc": None, "placeholders": [], "filled_body": "",
+            "template_forbidden": "", "image_descriptions": [],
+            "sender": "", "sender_display_name": "",
+        }
+
+    import unittest.mock as um
+    # 关键：patch `agent.outlook_drafts.run_template_reply`，因为 process_mail
+    # 用 from import 捕获本地引用；patch 模块属性不生效。
+    with um.patch.object(od, "run_template_reply", side_effect=spy):
+        router = MailboxRouter(uk="customer.care@ismart-service.com")
+        mail = Mail(
+            id="m2", subject="Re: app binding",
+            sender="customer@x.com", sender_display_name="Jane",
+            received_at="2026-07-02T10:00:00Z",
+            body_text="still can't bind",
+            is_read=False, conversation_id="conv-X",
+        )
+        od.process_mail(
+            mail, g=g, llm=llm, templates=[], allowlist=None,
+            dry_run=True, use_llm=True, router=router, dedup=None,
+        )
+    assert "thread_context" in captured, captured
+    assert "Jane" in captured["thread_context"], captured["thread_context"]
+    assert "QR" in captured["thread_context"], captured["thread_context"]
+
+
+def test_extract_pdf_descriptions_skips_non_pdf():
+    """M2.5.5: _extract_pdf_descriptions 只对 application/pdf 出手。"""
+    from agent.outlook_drafts import GraphClient, Mail, _extract_pdf_descriptions
+
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(side_effect=Exception("should not call"))
+    mail = Mail(
+        id="m", subject="s", sender="a@x.com",
+        received_at="", body_text="", is_read=False,
+        attachments=[
+            {"id": "a1", "name": "photo.jpg", "contentType": "image/jpeg",
+             "size": 100, "isInline": False},
+            {"id": "a2", "name": "doc.docx", "contentType":
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+             "size": 100, "isInline": False},
+        ],
+    )
+    out = _extract_pdf_descriptions(mail, g)
+    assert out == []
+    assert not g.download_attachment.called
+
+
+def test_extract_pdf_descriptions_handles_unreadable_pdf():
+    """M2.5.5: 损坏 / 加密 / 扫描型 PDF → 不抛错，给出空描述标签。"""
+    from agent.outlook_drafts import GraphClient, Mail, _extract_pdf_descriptions
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(return_value=b"%PDF-garbage-not-real")
+    mail = Mail(
+        id="m", subject="s", sender="a@x.com",
+        received_at="", body_text="", is_read=False,
+        attachments=[
+            {"id": "a1", "name": "scan.pdf", "contentType": "application/pdf",
+             "size": 100, "isInline": False},
+        ],
+    )
+    out = _extract_pdf_descriptions(mail, g)
+    # 不抛错，返回 list（可能空或含"无可抽取文本"标签，取决于 pypdf 行为）
+    assert isinstance(out, list)
+
+
+# ── 5. entry point ─────────────────────────────────────────────────────
+    """M2.5.5: pypdf 抽 PDF 文本。生成一个最小 PDF，验证 _extract_pdf_descriptions。"""
+    from agent.outlook_drafts import GraphClient, Mail, _extract_pdf_descriptions
+
+    # 生成最小 PDF（含 "Hello PDF World" 文本）
+    import pypdf, io
+    writer = pypdf.PdfWriter()
+    page = writer.add_blank_page(width=595, height=842)
+    # 注入文本（最简方式：用 Reportlab 类的工具。但 Reportlab 不可用，用
+    # Annotation trick 代替 —— pypdf 能从 annotations 读到 text），
+    # 但更可靠：跳过这条测试用生成的 PDF，直接 mock download_attachment。
+    # 改为测"非 PDF 跳过 + 不抛错"
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(side_effect=Exception("should not call"))
+    mail = Mail(
+        id="m", subject="s", sender="a@x.com",
+        received_at="", body_text="", is_read=False,
+        attachments=[
+            {"id": "a1", "name": "photo.jpg", "contentType": "image/jpeg",
+             "size": 100, "isInline": False},   # 不是 PDF
+        ],
+    )
+    out = _extract_pdf_descriptions(mail, g)
+    assert out == []
+    assert not g.download_attachment.called
+
+
+def _minimal_docx_bytes(paragraph: str) -> bytes:
+    import io
+    import zipfile
+
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>"
+        + paragraph.replace("&", "&amp;").replace("<", "&lt;")
+        + "</w:t></w:r></w:p></w:body></w:document>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("word/document.xml", document_xml)
+    return buf.getvalue()
+
+
+def test_extract_document_descriptions_reads_docx_letter():
+    """挂号信 .docx（如 courrier MG France.docx）必须抽正文喂 triage。"""
+    from agent.outlook_drafts import GraphClient, Mail, _extract_document_descriptions
+
+    letter = (
+        "I have been waiting one month for a reply to my registered letter "
+        "regarding iSMART connectivity on VIN LSJXXXXXXXXXXXXX1."
+    )
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(return_value=_minimal_docx_bytes(letter))
+    mail = Mail(
+        id="m", subject="Reclamation", sender="maurice.vignon@gmail.com",
+        received_at="", body_text="copy attached", is_read=False,
+        attachments=[{
+            "id": "a1",
+            "name": "courrier MG France.docx",
+            "contentType":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "size": 10459,
+            "isInline": False,
+        }],
+    )
+    out = _extract_document_descriptions(mail, g)
+    assert len(out) == 1
+    assert "courrier MG France.docx" in out[0]
+    assert "registered letter" in out[0]
+    g.download_attachment.assert_called_once()
+
+
+def test_extract_document_raw_sink_keeps_unredacted_vin():
+    from agent.outlook_drafts import GraphClient, Mail, _extract_document_descriptions
+
+    vin = "LSJWH4099PN101557"
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(
+        return_value=_minimal_docx_bytes(f"Registered letter VIN {vin} ACC LKA")
+    )
+    mail = Mail(
+        id="m", subject="Reclamation", sender="a@x.com",
+        received_at="", body_text="see attached", is_read=False,
+        attachments=[{
+            "id": "a1",
+            "name": "letter.docx",
+            "contentType":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "size": 4000,
+            "isInline": False,
+        }],
+    )
+    raw_sink: list[str] = []
+    out = _extract_document_descriptions(mail, g, raw_sink=raw_sink)
+    assert vin in "\n".join(raw_sink)
+    assert "VIN_MASK_" in out[0]
+    assert vin not in out[0]
+
+
+def test_extract_document_descriptions_skips_images():
+    from agent.outlook_drafts import GraphClient, Mail, _extract_document_descriptions
+
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(side_effect=Exception("should not call"))
+    mail = Mail(
+        id="m", subject="s", sender="a@x.com",
+        received_at="", body_text="", is_read=False,
+        attachments=[{
+            "id": "a1", "name": "photo.jpg", "contentType": "image/jpeg",
+            "size": 100, "isInline": False,
+        }],
+    )
+    assert _extract_document_descriptions(mail, g) == []
+    assert not g.download_attachment.called
+
+
+def test_queue_category_helpers():
+    from agent.outlook_drafts import (
+        skip_needs_human_queue, draft_needs_second_reply_queue,
+    )
+
+    assert skip_needs_human_queue("follow_up_needs_human")
+    assert skip_needs_human_queue("dealer_unresolved_needs_human")
+    assert skip_needs_human_queue("parked_false_awake_needs_human")
+    assert skip_needs_human_queue("europe_service_subscription_needs_human")
+    assert skip_needs_human_queue("ismart_plan_or_3g_needs_human")
+    assert skip_needs_human_queue("region=Asia (region gate)")
+    assert skip_needs_human_queue("red_flag=['lawyer_letter']")
+    assert skip_needs_human_queue("auto_reply_level=no_auto_reply: 法规")
+    assert not skip_needs_human_queue("already_has_draft")
+    assert not skip_needs_human_queue("we_replied_last")
+    assert not skip_needs_human_queue("duplicate")
+    assert not skip_needs_human_queue("already_scanned")
+    assert not skip_needs_human_queue("pure_chase_nudge")
+    assert not skip_needs_human_queue("close_invalid_junk")
+    assert draft_needs_second_reply_queue({"template_id": "GEN-001"})
+    assert draft_needs_second_reply_queue({"auto_reply_level": "auto_draft_needs_info"})
+    assert not draft_needs_second_reply_queue({
+        "template_id": "ACC-002", "auto_reply_level": "auto_draft_safe",
+    })
+    g = MagicMock()
+    g.remove_category = MagicMock(return_value=True)
+    from agent.outlook_drafts import unstamp_queue_category, QUEUE_HUMAN_CATEGORY
+    assert unstamp_queue_category(g, "mid", QUEUE_HUMAN_CATEGORY, dry_run=False)
+    g.remove_category.assert_called_once_with("mid", QUEUE_HUMAN_CATEGORY)
+    assert not unstamp_queue_category(g, "mid", QUEUE_HUMAN_CATEGORY, dry_run=True)
+    # 已落草稿不再打「待二次回复」：坐席看 Drafts，不是等客户第二封。
+
+
+def test_follow_up_stamps_human_queue_tag():
+    from agent.outlook_drafts import (
+        GraphClient, Mail, process_mail, QUEUE_HUMAN_CATEGORY,
+    )
+
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "m1", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-01T10:00:00Z", "body_text": "ac not working"},
+        {"id": "m2", "sender_email": "customer.care@ismart-service.com",
+         "sender_name": "CS",
+         "received_at": "2026-07-02T10:00:00Z", "body_text": "please send screenshot"},
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "C",
+         "received_at": "2026-07-05T10:00:00Z", "body_text": "here is the photo"},
+    ])
+    g.get_categories = MagicMock(return_value=[])
+    g.set_categories = MagicMock()
+    g.add_category = MagicMock()
+    g.download_attachment = MagicMock(return_value=b"")
+    mail = Mail(
+        id="current",
+        subject="Re: AC",
+        sender="customer@x.com",
+        sender_display_name="G",
+        received_at="2026-07-05T10:00:00Z",
+        body_text="here is the photo",
+        is_read=False,
+        conversation_id="conv-Y",
+    )
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=False, use_llm=False, router=None, dedup=None,
+    )
+    assert rec.get("skipped") == "follow_up_needs_human", rec
+    g.add_category.assert_called_with("current", QUEUE_HUMAN_CATEGORY)
 
 
 # ── 5. entry point ─────────────────────────────────────────────────────

@@ -31,6 +31,18 @@ _PLACEHOLDER_FIRST_NAMES: frozenset[str] = frozenset({
 })
 
 
+def _name_token_unusable(token: str | None) -> bool:
+    """邮箱当地名（Graph 常用显示名=地址）→ 不要 Dear Mr./Ms. tcharles@sky.com。"""
+    if not token:
+        return False
+    t = token.strip()
+    if "@" in t or "." in t and t.lower().endswith(
+        (".com", ".uk", ".net", ".org", ".co.uk")
+    ):
+        return True
+    return False
+
+
 # ── 公开 API ───────────────────────────────────────────────────────
 
 def extract_display_name(sender: str) -> Optional[str]:
@@ -109,6 +121,8 @@ def build_greeting(sender: str) -> str:
     # 拿不到 first/last，或 first 是占位词 → 保留默认
     if not first or first.lower() in _PLACEHOLDER_FIRST_NAMES:
         return "Dear customer,"
+    if _name_token_unusable(first) or _name_token_unusable(last):
+        return "Dear customer,"
     # 优先级：last > first + last > first > 单 token
     if last:
         return f"Dear Mr./Ms. {last},"
@@ -174,6 +188,8 @@ def personalize_greeting(
         first, last = None, None
     # 拿不到 first/last，或 first 是占位词 → fallback "Dear customer,"
     if not first or first.lower() in _PLACEHOLDER_FIRST_NAMES:
+        greeting = "Dear customer,"
+    elif _name_token_unusable(first) or _name_token_unusable(last):
         greeting = "Dear customer,"
     elif last:
         greeting = f"Dear Mr./Ms. {last},"

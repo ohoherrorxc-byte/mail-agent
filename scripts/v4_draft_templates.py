@@ -61,7 +61,7 @@ SUBSCENARIOS_PER_INTENT = 4
 # 任意 closing 边界（保留到 closing 为止）
 _CLOSING_MARKERS = (
     r"Best regards,?\s*\n?\s*[Ii]?[Ss]mart[- ]service team",
-    r"Best regards,?\s*\n?\s*iSMART-Service Team",
+    r"Best regards,?\s*\n?\s*iSMART Service Team",
     r"Best regards,?\s*\n?\s*[Ii]smart Customer Service",
     r"Best regards,?\s*\n?\s*MG Europe (customer service|CS|support)",
     r"Mit freundlichen Grüßen",

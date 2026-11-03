@@ -2,6 +2,8 @@
 
 iSmart 海外售后邮件自动 triage / drafting / 合规检查 PoC。**结果永远送人工工作台，不主动 send。**
 
+一封信的完整处理顺序见 [项目说明.md](项目说明.md)。联调拍板以 [决策日志.md](决策日志.md) 为准。阶段与关口以 [整体规划.md](整体规划.md) 为准；近两周日历见 [排期.md](排期.md)。现行生产技术路径见 [技术工作流.md](技术工作流.md)。
+
 ## 项目范围
 
 - **业务**：iSmart（MG 海外售后），真实流量 5013 条脱敏样本 + 77 条客服回复模板（[iSMART售后服务邮箱回复方法_20260308.xlsx](iSMART售后服务邮箱回复方法_20260308.xlsx)）
@@ -23,33 +25,32 @@ iSmart 海外售后邮件自动 triage / drafting / 合规检查 PoC。**结果�
 
 6 区 enum：Europe / Asia / South America / Africa / Oceania / North America。
 
-**Why**（用户原话）："涉及到法规的问题也人工"。M1 合规规则只有 NA 套（GDPR / UK GDPR / 沙特 PCA 等都没接）。
+**Why**（用户原话）："涉及到法规的问题也人工"。红牌 / 客户主动行使 GDPR 等权利仍升人工。2026-09-15 拍板「区域限制关了」：不再仅因大区（中东/亚洲/拉美/非洲）跳过自动草稿。
 
-### M2 已解锁：两阶段 gate + 4 区细路由
+### M2 已解锁：两阶段 gate（阶段 2 默认关）
 
-**[agent/email_agent.py:region_gate_should_escalate()](agent/email_agent.py)** 改两阶段：
+**[agent/email_agent.py:region_gate_should_escalate()](agent/email_agent.py)**：
 
-**阶段 1（硬敏感词）**：任意 region 命中 → 升人工
+**阶段 1（硬敏感词，仍开）**：任意 region 命中 → 升人工
 - `red_flags` 命中 `lawyer_letter` / `litigation_threat` / `media_cc` / `social_media_threat` / `safety_incident`
 - body 含 GDPR / UK GDPR 删除请求 / 数据保护官联系 / 跨境数据传输 / subject access request 关键词
 
-**阶段 2（region 路由）**：`triage.region ∈ SUPPORTED_REGIONS_M2 = {North America, Europe, United Kingdom, Oceania}` 放行；其它（Asia / South America / Africa）仍升人工。
+**阶段 2（region 路由，已关）**：历史上仅 `SUPPORTED_REGIONS_M2 = {North America, Europe, United Kingdom, Oceania}` 放行。2026-09-17 起 **不再按大区拦**，`M2_ENFORCE_REGION_GATE` 无效。2026-10-09 起：**选模板完全不看区域**，不因表单国家或「本国不支持」选 `REG-001`。仅应急 `M2_ROLLBACK_TO_M1=1` 回到仅 NA。2026-10-10 例外：表单 `Country/Region` 落在对照表「美洲」26 国时，固定「本区域不支持」草稿并保留转人工，见 [美洲表单国家固定回复.md](美洲表单国家固定回复.md)。
 
 UK 识别：[agent/prompts.py:_resolve_region_key()](agent/prompts.py) 把 `region="Europe"` + `country ∈ {GB, UK, United Kingdom, England, Scotland, Wales, Northern Ireland, ...}` 重路由为 `United Kingdom`。
 
-**M2 合规 picker**：[agent/prompts.py:pick_compliance_constraints()](agent/prompts.py) / `build_compliance_system(region, country)` 按 region 返回 `ROLE_AND_LAWS_BY_REGION` / `COMPLIANCE_CONSTRAINTS_BY_REGION` 各 4 套（NA / EU / UK / OC）。亚洲 / 非洲 / 拉美仍是占位（`raise ValueError` if called），LLM 走不到那里。
+**M2 合规 picker**：[agent/prompts.py:pick_compliance_constraints()](agent/prompts.py) / `build_compliance_system(region, country)`：NA / EU / UK / OC 用已接条文；亚洲 / 中东 / 非洲 / 拉美用占位 ROLE + NA 硬规则，禁止编造当地法条编号。
 
-**Region env vars**（应急用）：
+**Region env vars**：
 - `M2_ROLLBACK_TO_M1=1` —— 回退到 M1 行为（仅 NA 放行）
-- `M1_BYPASS_REGION_GATE=1` —— 跳阶段 2 region 校验，仅 eval 用
-- 这俩 env var 生产路径不应设置
+- `M2_ENFORCE_REGION_GATE` —— 已废弃，不恢复四区拦
+- `M1_BYPASS_REGION_GATE=1` —— 旧 eval 兼容；阶段 2 已关时无效果
 
 **Why M2 now**：[eval/runs/auto_intent_coverage.json](eval/runs/auto_intent_coverage.json) 5 万真流量里 EU/UK/Oceania 占 90%+；M1 NA-only 直接拒掉 90% 业务。
 
-**M3 解锁条件**（Asia / South America / Africa）：
-1. 在 [agent/prompts.py](agent/prompts.py) 把 `ROLE_AND_LAWS_LATAM` / `_MEA` / `_APAC` 从占位替换为法规条款（LGPD / PIPL / APPI / PIPA / PDPA / India DPDP Act / Saudi PDPL）
-2. `SUPPORTED_REGIONS_M2` 扩到含 `Asia` / `South America` / `Africa`
-3. 跑全链路回归 + 抽样人工 review
+**MEA/APAC/LATAM 法规条文仍待补**（不挡草稿）：
+1. 在 [agent/prompts.py](agent/prompts.py) 把 `ROLE_AND_LAWS_LATAM` / `_MEA` / `_APAC` 从占位替换为法规条款（LGPD / PIPL / APPI / PIPA / PDPA / India DPDP Act / Saudi PDPL / UAE DIFC DPL）
+2. 跑全链路回归 + 抽样人工 review
 
 
 ### 3. PII 脱敏 — 客户数据绝不能进项目
@@ -105,10 +106,15 @@ ADAS 4 类（`adas_acc`/`adas_aeb`/`adas_lka`/`adas_tja`）默认 P1（安全相
 
 ## 修改前必读
 
+- 改路由、模板正文或选行 → 先按 [变更规范.md](变更规范.md) 填变更单，再动代码
 - 改 enum → 三同步（schemas.py + prompts.py + 真值）
 - 改 prompts → 先 `--triage-only` 跑 vN 回归，再考虑 full eval
 - 改 region gate → 看 M2 解锁条件是否满足
 - 加新真值样本 → CSV 在 `~/Documents/private/iSmart-email-ledger/`，先脱敏再 import
+- **热词锁错桶**（点名功能 ≠ 主诉）：不要只加 prompt。四步写进 [决策日志.md](决策日志.md) §1.3 —— 检测器 → 有知识库行则强制 / 无行则转人工 → 候选禁错 id + 打分 0 → `TEMPLATE_PICK_SYSTEM` 一条 + 正反例（`eval/test_xlsx_scenario_routing.py`）。已有：OTA 范围≠ADAS 检测、VPN≠NET-001、中控熄屏≠CPAA-001、副账号≠GEN-005、表单 VIN≠GEN-005（连不上/绑车 how-to/车机没网）、点名 TBox≠TBOX-001（未换件走 STATUS-003）、privacy notice denied≠STATUS-003→FICM-PRIV-002、Hello MG 只唤 USB/AA≠CPAA-001→FICM-VOICE-001、how-to/咨询≠进店检修（谷电预约、充电功率、手册、前车主、数字钥匙通知、手机配车、漆面/保养咨询）、error 47→STATUS-006、扫码无法识别→BIND-008、网络不可用 toast→STATUS-003（不是 BIND-008）、缺功能页→DK-003、App 里程→DK-004、导航换语言→MAP-005、在线地图更新失败→MAP-002（不是 FOTA-001）、色号→SVC-004、油耗抱怨→NON-009、充电管理无数据→STATUS-012、第三方家充桩/Wallbox 充不上→CHG-001（不是 STATUS-012）、欧洲服务订阅→转人工、App 胎压通知→APP-NOTIFICATION-001、PLAN-001/NET-PLAN-001 下线（3G/到期套餐转人工，不是 NET-001）、冒用/非授权强制解绑→转人工（禁 GEN-001/BIND-001）、maintenance history→SVC-001（不是剩余保养天数）、仪表排放警告→NON-004（未确认不写 App 警告）、app not responding→STATUS-003、远控/车况停在 update mode→STATUS-003（无 VIN 也不改 GEN-002）、前车主锁 GPS→确认解绑+网络刷新、车机加语言→REQ-001（不是 FICM-001）、保养/兑现计划/谁联系→SVC-001、预约设置失败≠CHG-SCHED how-to、已绑定+远控失败→STATUS-003（不是绑车/GEN-003）、辅助电瓶/仪表报警→NON-001、表单已有 VIN/车型不要再要、第三方后装件→NON-010（不是 FICM-001）、无线 AA 升级问句→FICM-001（两问合写）、未确认不支持前绑车/二维码→GEN-001（禁 REG-001）、明确本区不支持→REG-001 no_auto、app says 续航骤降/App 不让充电→STATUS-012 要截图（禁 CHG-001/002）、手册车型不匹配→MAN-001+截图、10-26 审稿：卖车从 App 移除车辆→BIND-007、改注册邮箱→ACC-005、old owner→BIND-001、找回密码和删号合写、另一设备登录和删号合写、删旧车后 car not found 要账号/视频/新 VIN、电池配置看手册、两个电池容量要截图和证明、在问有没有充电目标→CHG-SCHED（设了又跳回仍 STATUS-013）、选不了数字钥匙且要开副账号合写、英文解绑再绑合写、车况停住→STATUS-003、描述只有 unable to connect to the application→转人工、钥匙留在后备箱→NON-007、没收到绑车码→ACC-004、另一辆车未登记→BIND-007、二维码太小→BIND-008（同信 e-call 补一句经销商）、due for service→SVC-001、只说 very bad app→COMP-001。**一封信多问**：有模板的按行回；≥2 条走 `detect_issue_lanes` 合写（含 FICM-001 升级问句）；只有一条也回。没有对应行的问先不回，不要整封 `semantic_mismatch`。
+- **问题标签**：人工光杆 L2 是准的、保持红色，AI **不得改色**。AI 只打 `问题:`（淡紫 preset8）；`AUTO:` 灰。有人工红标则 `问题:` 改成和红标同字，去掉对不上的旧 `问题:`。没有红标时先读完整最新一段再定类，打完用同一段核对；只对上一句的类不留。已经试过的解绑、重装不当主诉。收不到 App 消息、图标有角标用消息中心。问候 Hello MG 不当语音。引导手册不当问题类型。明确说本区不支持时用支持区域，不跟绑车。无人工标时不要用页脚打隐私、不要空表单打车控。
+- **已附图**：vision 抽到截图后，草稿删「请再提供 screenshot/photo」行；车机视频、App 版本仍可要（`_strip_screenshot_asks_when_attached`）。
+- **关单**：客户明确已修好 / 已经能用（already resolved、works fine、successfully re-established）或客服已回后说了 Thank you / Thanks（不限字数；同一段还有新故障或新请求则不关，包括还在说 error、或补了报错截图）、会照做（will do that）→ `关闭-已解决` + 摘转人工、**不**改 isRead（`customer_issue_resolved`）。**纯催促** never respond / 一直不回、没有新的车/App 问题 → `关闭-无效邮件` + 已读、不转人工（`pure_chase_nudge`）。**银行公证/公司 Legalization/G.E.MI. 误转发**、**合作方推广自动回执**（partnership / We'll connect soon / Unsubscribe，且没有车/App 主诉）→ `关闭-无效邮件` + 已读（`close_invalid_junk`）。**内容重复**（同客户连点或隔天再发、正文几乎一样，不限间隔；或同一 VIN 的另一个邮箱描述相同，不限时间）→ `关闭-无效邮件` + 已读，摘掉 `转人工`，不建草稿，不再做问题分类；即使第二封引用了客服回复，也不再转人工。已有 `关闭-无效邮件` 的信也不再改 `问题:`。表单描述整段比较，不截末尾 400 字。跟进里仍有故障、且不是这封重复 → 仍 `转人工`。**全库只有打「关闭-无效邮件」才改 isRead。**
 
 ## 跑命令速查
 
@@ -169,7 +175,7 @@ python3 -c "import json; print(json.dumps(json.load(open('eval/runs/v6_triage.js
 1. **不能主动给客户发送邮件，只能建草稿** —— 永远不调 sendMail；
    只调 createReply（在 Drafts 落新草稿），人工事后审 / 改 / 点 Send。
 2. **不能有任何删除动作** —— 不调 DELETE / 不 move 到 Deleted Items /
-   不 markAsRead / 不删任何邮件 / 不删任何草稿。原邮件 isRead 保持原状。
+ 不 markAsRead（**唯一例外**：打 `关闭-无效邮件`）/ 不删任何邮件 / 不删任何草稿。
 3. **草稿正文必须全英文** —— 不论客户用什么语言（意 / 西 / 法 / 德 / 日 / 中）写邮件，
    草稿回复一律用英文。改写 / 起草 prompt 都必须强制 `customer_lang = "en-US"`。
    原因：客服团队 / 工程师内部协作语言是英语；客户在意自己的语言，
@@ -188,10 +194,10 @@ python3 -c "import json; print(json.dumps(json.load(open('eval/runs/v6_triage.js
 | `method in {"DELETE"}` | 所有 DELETE 调用 |
 | `POST .../sendMail` | sendMail（哪怕路径匹配白名单也挡） |
 | `POST .../move` | move 到其他文件夹 |
-| `PATCH body 含 isRead` | 改原邮件读未读状态 |
+| `PATCH body 含 isRead` | 单独禁；仅与 `关闭-无效邮件` 同 PATCH 时放行 |
 | URL 白名单 substring 匹配 | calendar / events / contacts 等其他 Graph 资源 |
 | `_created_draft_ids` 注册表 | PATCH 任何非本进程创建的 draft / 原邮件 / 别人邮件 |
-| 显式 `send_mail` / `delete_message` / `move_message` / `mark_as_read` 方法 | 永远 raise `MailboxSafetyError` |
+| 显式 `send_mail` / `delete_message` / `move_message` / `mark_as_read` 方法 | 永远 raise `MailboxSafetyError`（无效关单走 `apply_close_invalid`） |
 
 **单元测试**：[eval/test_outlook_safety.py](eval/test_outlook_safety.py) 16 case 全过（11 挡 + 5 放行）。
 

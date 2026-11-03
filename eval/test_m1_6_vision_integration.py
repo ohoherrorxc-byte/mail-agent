@@ -4,10 +4,9 @@ test_m1_6_vision_integration.py — M1.6 vision 集成单元测试。
 覆盖：
 1. Mail dataclass 默认 attachments=[]
 2. _redact_mail 透传 attachments（不能因 redact 把附件搞丢）
-3. VISION_MAX_IMAGE_BYTES 限制：超 4MB 的 image 跳过（防 token 爆炸）
-4. VISION_MAX_IMAGES_PER_MAIL 限制：超 3 张的 image 跳过
-5. URL 白名单包含 attachment $value 路径
-6. schema.ImageDescription 字段齐
+3. 图片不按体积/张数预跳过（下不下来或 vision 失败才跳）
+4. URL 白名单包含 attachment $value 路径
+5. schema.ImageDescription 字段齐
 
 不需要真连 Graph / Azure OpenAI —— 全本地 mock。
 """
@@ -22,8 +21,6 @@ sys.path.insert(0, str(ROOT))
 from agent.outlook_drafts import (
     Mail,
     MailboxSafetyError,
-    VISION_MAX_IMAGES_PER_MAIL,
-    VISION_MAX_IMAGE_BYTES,
     _ALLOWED_GRAPH_PATTERNS,
     _redact_mail,
 )
@@ -65,24 +62,42 @@ def test_redact_mail_passes_attachments():
     print("✓ test_redact_mail_passes_attachments")
 
 
-# ── 测试 3: VISION_MAX_IMAGE_BYTES 常量 ──────────────────────────────────
-def test_vision_size_limit_constant():
-    """M1.6 设计：单图 ≤ 4MB（base64 ~5.3MB 字符 + ~3000 token）。
-    常量必须 = 4MB。改了要小心成本。"""
-    assert VISION_MAX_IMAGE_BYTES == 4 * 1024 * 1024, (
-        f"期望 4MB, 实际 {VISION_MAX_IMAGE_BYTES}"
-    )
-    print("✓ test_vision_size_limit_constant")
+# ── 测试 3: 图片不按体积/张数预跳过 ──────────────────────────────────
+def test_vision_reads_all_images_no_prefilter():
+    from unittest.mock import MagicMock
+    from agent.outlook_drafts import GraphClient, Mail, _extract_image_descriptions
+    from agent.schemas import ImageDescription
 
-
-# ── 测试 4: VISION_MAX_IMAGES_PER_MAIL 常量 ──────────────────────────────
-def test_vision_count_limit_constant():
-    """M1.6 设计：每封邮件 ≤3 张图。
-    防 6+ 张图烧 token。"""
-    assert VISION_MAX_IMAGES_PER_MAIL == 3, (
-        f"期望 3, 实际 {VISION_MAX_IMAGES_PER_MAIL}"
+    g = MagicMock(spec=GraphClient)
+    g.download_attachment = MagicMock(return_value=b"\xff\xd8fake")
+    llm = MagicMock()
+    llm.invoke_json_with_images = MagicMock(
+        return_value=(
+            ImageDescription(
+                description="ok", app_name="none",
+                error_text=None, error_code=None, is_ismart_app=False,
+            ),
+            None,
+        )
     )
-    print("✓ test_vision_count_limit_constant")
+    mail = Mail(
+        id="m", subject="s", sender="a@x.com",
+        received_at="", body_text="", is_read=False,
+        attachments=[
+            {"id": "a1", "name": "big.jpg", "contentType": "image/jpeg",
+             "size": 20 * 1024 * 1024, "isInline": False},
+            {"id": "a2", "name": "two.png", "contentType": "image/png",
+             "size": 100, "isInline": False},
+            {"id": "a3", "name": "three.jpg", "contentType": "image/jpeg",
+             "size": 100, "isInline": False},
+            {"id": "a4", "name": "four.jpg", "contentType": "image/jpeg",
+             "size": 100, "isInline": False},
+        ],
+    )
+    out = _extract_image_descriptions(mail, g, llm)
+    assert g.download_attachment.call_count == 4
+    assert len(out) == 4
+    print("✓ test_vision_reads_all_images_no_prefilter")
 
 
 # ── 测试 5: URL 白名单包含 attachment $value 路径 ──────────────────────
@@ -100,22 +115,14 @@ def test_allowed_graph_patterns_has_attachment_value():
     print("✓ test_allowed_graph_patterns_has_attachment_value")
 
 
-# ── 测试 6: 白名单仍不含 DELETE / sendMail / move / patch isRead ─────
+# ── 测试 6: 白名单仍不含 sendMail / move；DELETE 仅草稿附件 ─────
 def test_allowed_graph_patterns_no_dangerous():
-    dangerous_substrings = [
-        "DELETE", "/sendMail", "/move", "/messages/{mail_id}/attachments",
-    ]
-    for p in _ALLOWED_GRAPH_PATTERNS:
-        for d in dangerous_substrings:
-            # "$value" 路径 OK；其它匹配要 fail
-            if d in p and "/messages/{mail_id}/attachments" in p and "$value" not in p:
-                raise AssertionError(f"白名单含危险 pattern: {p}")
-    # sendMail / move / DELETE 必须不在白名单
     raw = "\n".join(_ALLOWED_GRAPH_PATTERNS)
-    for keyword in ["DELETE", "sendMail", "/move"]:
-        assert keyword not in raw, (
-            f"白名单含危险关键字 {keyword}:\n{raw}"
-        )
+    assert "sendMail" not in raw
+    assert "/move" not in raw
+    for p in _ALLOWED_GRAPH_PATTERNS:
+        if p.startswith("DELETE"):
+            assert "/attachments/" in p and "{draft_id}" in p, p
     print("✓ test_allowed_graph_patterns_no_dangerous")
 
 
@@ -135,8 +142,7 @@ def main() -> int:
     tests = [
         test_mail_default_attachments_empty,
         test_redact_mail_passes_attachments,
-        test_vision_size_limit_constant,
-        test_vision_count_limit_constant,
+        test_vision_reads_all_images_no_prefilter,
         test_allowed_graph_patterns_has_attachment_value,
         test_allowed_graph_patterns_no_dangerous,
         test_image_description_schema,

@@ -273,7 +273,7 @@ Rules:
 - "Dear customer," → "尊敬的客户，"
 - "Thanks for your email." / "Thank you for your email." → "感谢您的来信。"
 - "Best regards," / "Sincerely," → "此致敬礼，"
-- "iSMART Service Team" / "ismart-service team" → "iSMART 客服团队" (keep brand name)
+- "iSMART Service Team" / "iSMART Service Team" → "iSMART 客服团队" (keep brand name)
 - Preserve numbered lists (1. 2. 3.) and bullet structures.
 - Keep ALL technical terms untranslated, same list as Issue rules
   (VIN, QR, App, T-Box, FOTA, OTA, ADAS, ACC/AEB/LKA/TJA, CPAA, CarPlay, Android Auto,

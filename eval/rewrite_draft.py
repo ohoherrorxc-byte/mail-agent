@@ -73,7 +73,7 @@ Error code / 截图 客户都已提供，不要再要。
 5. **回复语言固定为英文（en-US）** —— 不论客户用哪种语言（it / es / fr / de / ja / zh）\
 写邮件，草稿一律用英文。客户语言字段保留但不参与回复语言选择。
 
-6. **保留模板签名** —— "Best regards, ismart-service team" 不改。
+6. **保留模板签名** —— "Best regards, iSMART Service Team" 不改。
 
 你可以说的（事实安全的话术）：
 
@@ -81,7 +81,7 @@ Error code / 截图 客户都已提供，不要再要。
 - Your case has been escalated to our technical support team
 - We will follow up / Our team is looking into this
 - For urgent situations, contact your local MG service / roadside assistance
-- Keep closing signature "Best regards, ismart-service team"
+- Keep closing signature "Best regards, iSMART Service Team"
 
 **回复语言**：en-US（固定英文，不跟客户语言）
 

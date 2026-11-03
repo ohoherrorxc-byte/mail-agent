@@ -1,0 +1,5592 @@
+{
+  "version": "M2.5",
+  "source": "iSMART自动回复知识库_全量模板_20260729.xlsx",
+  "built_at": "2026-08-27T09:08:01.450655+00:00",
+  "n_templates": 96,
+  "templates": [
+    {
+      "template_id": "GEN-001",
+      "level1": "通用处理",
+      "level2": "请求完整车辆信息",
+      "sub_intent": "general_request_complete_vehicle_info",
+      "intent": "other",
+      "scenario": "客户描述过于笼统，无法判断问题；需要基础信息后再查后台或分析",
+      "triggers": [
+        "help",
+        "not working",
+        "issue",
+        "problem",
+        "cannot use",
+        "app not working",
+        "no details",
+        "【缺少信息】"
+      ],
+      "scenario_keywords": [
+        "客户描述过于笼统",
+        "无法判断问题",
+        "需要基础信息后再查后台或分析"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "GEN-002",
+      "level1": "通用处理",
+      "level2": "请求VIN/提示VIN位置",
+      "sub_intent": "general_request_vin",
+      "intent": "other",
+      "scenario": "客户未提供 VIN 或 VIN 非 17 位；客户把VIN理解为车牌号；需要引导客户找到 VIN",
+      "triggers": [
+        "vin missing",
+        "chassis number",
+        "vehicle number",
+        "registration only",
+        "plate only",
+        "where is vin",
+        "vin码位置"
+      ],
+      "scenario_keywords": [
+        "客户未提供",
+        "vin",
+        "vin",
+        "17",
+        "客户把",
+        "vin",
+        "理解为车牌号",
+        "需要引导客户找到",
+        "vin"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "GEN-003",
+      "level1": "通用处理",
+      "level2": "VIN不正确",
+      "sub_intent": "general_vin_incorrect",
+      "intent": "other",
+      "scenario": "客户提供的 VIN 查询不到或照片不是车辆 VIN",
+      "triggers": [
+        "vin incorrect",
+        "vin not found",
+        "wrong vin",
+        "不是17位",
+        "查询不到",
+        "chassis invalid"
+      ],
+      "scenario_keywords": [
+        "客户提供的",
+        "vin",
+        "查询不到或照片不是车辆",
+        "vin"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "GEN-004",
+      "level1": "通用处理",
+      "level2": "请求视频/截图",
+      "sub_intent": "general_request_screenshot_video",
+      "intent": "other",
+      "scenario": "文字描述不足；需要看到完整操作路径和报错",
+      "triggers": [
+        "unclear error",
+        "unclear issue",
+        "no error message",
+        "no error code",
+        "unknown error",
+        "failed but no details",
+        "not sure what happened",
+        "cannot describe clearly",
+        "issue occurs randomly",
+        "intermittent issue",
+        "cannot reproduce",
+        "no visible error",
+        "nothing shown",
+        "app not working but no details",
+        "vehicle not working but no details",
+        "app or infotainment unclear",
+        "unclear whether app or car screen",
+        "which function is affected unclear",
+        "need full operation process",
+        "problem not visible from description",
+        "need evidence to confirm",
+        "cannot identify the affected function",
+        "cannot identify the error page"
+      ],
+      "scenario_keywords": [
+        "文字描述不足",
+        "需要看到完整操作路径和报错"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "GEN-005",
+      "level1": "通用处理",
+      "level2": "后台分析中",
+      "sub_intent": "general_backend_analyzing",
+      "intent": "other",
+      "scenario": "已收到 VIN/视频/截图，需要技术团队继续排查",
+      "triggers": [],
+      "scenario_keywords": [
+        "已收到",
+        "vin",
+        "视频",
+        "截图",
+        "需要技术团队继续排查"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "ACC-001",
+      "level1": "iSMART相关",
+      "level2": "App-账号管理相关",
+      "sub_intent": "app_account_management",
+      "intent": "app_account",
+      "scenario": "账号提示在另一台设备登录，被踢下线，频繁要求重新登录",
+      "triggers": [
+        "logged in on another device",
+        "different device",
+        "account active",
+        "kicked out",
+        "logs me out",
+        "another app",
+        "另一台设备"
+      ],
+      "scenario_keywords": [
+        "账号提示在另一台设备登录",
+        "被踢下线",
+        "频繁要求重新登录"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "ACC-002",
+      "level1": "iSMART相关",
+      "level2": "App-账号管理相关",
+      "sub_intent": "app_account_management",
+      "intent": "app_account",
+      "scenario": "忘记登录密码、重置密码、无法设置新密码",
+      "triggers": [
+        "forgot password",
+        "reset password",
+        "verification code",
+        "password wrong",
+        "cannot reset",
+        "expired email",
+        "忘记密码"
+      ],
+      "scenario_keywords": [
+        "忘记登录密码",
+        "重置密码",
+        "无法设置新密码"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "ACC-003",
+      "level1": "iSMART相关",
+      "level2": "App-账号管理相关",
+      "sub_intent": "app_account_management",
+      "intent": "app_account",
+      "scenario": "注册或重置时收不到邮箱验证码/验证链接过期",
+      "triggers": [
+        "verification email not received",
+        "code expired",
+        "email expired",
+        "no email",
+        "resend code",
+        "verify account"
+      ],
+      "scenario_keywords": [
+        "注册或重置时收不到邮箱验证码",
+        "验证链接过期"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "ACC-004",
+      "level1": "iSMART相关",
+      "level2": "iSMART-功能咨询",
+      "sub_intent": "ismart_feature_inquiry",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "忘记 PIN / 安全码 / 远控码，或绑车时被要求输入 PIN",
+      "triggers": [
+        "pin",
+        "security code",
+        "passcode",
+        "verification code",
+        "4 digit code",
+        "code to bind",
+        "忘记pin"
+      ],
+      "scenario_keywords": [
+        "忘记",
+        "pin",
+        "安全码",
+        "远控码",
+        "或绑车时被要求输入",
+        "pin"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "ACC-005",
+      "level1": "iSMART相关",
+      "level2": "App-账号管理相关",
+      "sub_intent": "app_account_management",
+      "intent": "app_account",
+      "scenario": "更换手机号/邮箱/新手机登录",
+      "triggers": [
+        "change mobile number",
+        "change email",
+        "new phone",
+        "lost phone",
+        "new handset",
+        "changed phone",
+        "更换手机"
+      ],
+      "scenario_keywords": [
+        "更换手机号",
+        "邮箱",
+        "新手机登录"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "BIND-001",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "二手车/新车扫码提示车辆已绑定，需要解绑前任车主",
+      "triggers": [
+        "already bound",
+        "previous owner",
+        "used car",
+        "force unbind",
+        "cannot bind",
+        "vehicle bound",
+        "已绑定"
+      ],
+      "scenario_keywords": [
+        "二手车",
+        "新车扫码提示车辆已绑定",
+        "需要解绑前任车主"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "BIND-002",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "后台显示车辆未绑定任何账号，但客户仍无法绑车",
+      "triggers": [
+        "not bound",
+        "no account",
+        "no binding",
+        "qr scanned no result",
+        "still asks to bind",
+        "没有绑定账号"
+      ],
+      "scenario_keywords": [
+        "后台显示车辆未绑定任何账号",
+        "但客户仍无法绑车"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "BIND-003",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "后台显示已绑定到某账号，需要客户确认是否本人/是否已自行解决问题",
+      "triggers": [
+        "bound to account",
+        "is this your account",
+        "confirm account",
+        "currently bound"
+      ],
+      "scenario_keywords": [
+        "后台显示已绑定到某账号",
+        "需要客户确认是否本人",
+        "是否已自行解决问题"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "BIND-004",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "已成功解绑前任车主/客户请求解绑已完成",
+      "triggers": [
+        "unbound successfully",
+        "removed previous owner",
+        "unlink completed",
+        "解绑成功"
+      ],
+      "scenario_keywords": [
+        "已成功解绑前任车主",
+        "客户请求解绑已完成"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "BIND-005",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "扫码绑车提示日期/时间/时区错误",
+      "triggers": [
+        "time zone",
+        "date time",
+        "time beam",
+        "check date and time",
+        "binding failed",
+        "日期",
+        "时区"
+      ],
+      "scenario_keywords": [
+        "扫码绑车提示日期",
+        "时间",
+        "时区错误"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "BIND-006",
+      "level1": "iSMART相关",
+      "level2": "App-绑车解绑相关",
+      "sub_intent": "app_binding_flow",
+      "intent": "app_binding",
+      "scenario": "一个账号下多辆车/删除不属于自己的车辆/车辆管理位置",
+      "triggers": [
+        "two vehicles",
+        "remove old car",
+        "vehicle management",
+        "add vehicle",
+        "multiple cars",
+        "删除车辆",
+        "多辆车"
+      ],
+      "scenario_keywords": [
+        "一个账号下多辆车",
+        "删除不属于自己的车辆",
+        "车辆管理位置"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "binding"
+      ]
+    },
+    {
+      "template_id": "STATUS-001",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "App 车态不更新、显示旧数据、里程/电量/位置不一致",
+      "triggers": [
+        "stuck",
+        "frozen",
+        "old data",
+        "not updating",
+        "wrong mileage",
+        "wrong battery",
+        "location old",
+        "app frozen",
+        "车态不更新"
+      ],
+      "scenario_keywords": [
+        "app",
+        "车态不更新",
+        "显示旧数据",
+        "里程",
+        "电量",
+        "位置不一致"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-002",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "App 显示 Vehicle Not Responded / 远控超时 / 车辆锁车后短时间不可达",
+      "triggers": [
+        "vehicle not responded",
+        "request timeout",
+        "car not responding",
+        "sleep mode",
+        "remote command failed",
+        "no response"
+      ],
+      "scenario_keywords": [
+        "app",
+        "显示",
+        "vehicle",
+        "responded",
+        "远控超时",
+        "车辆锁车后短时间不可达"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-003",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "网络不稳定、远控失败、疑似 TBox/TCU 网络问题",
+      "triggers": [
+        "network unavailable",
+        "weak signal",
+        "no connection",
+        "2g",
+        "4g no data",
+        "telematics",
+        "tbox",
+        "tcu",
+        "network issue"
+      ],
+      "scenario_keywords": [
+        "网络不稳定",
+        "远控失败",
+        "疑似",
+        "tbox",
+        "tcu",
+        "网络问题"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-004",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "远程空调无法开启、App显示发送成功但车辆无动作",
+      "triggers": [
+        "remote climate",
+        "remote ac",
+        "air conditioning",
+        "heating",
+        "climate failed",
+        "cannot start ac",
+        "远控"
+      ],
+      "scenario_keywords": [
+        "远程空调无法开启",
+        "app",
+        "显示发送成功但车辆无动作"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-005",
+      "level1": "iSMART相关",
+      "level2": "FICM-隐私协议相关",
+      "sub_intent": "ismart_privacy",
+      "intent": "ismart_privacy",
+      "scenario": "App 提示未接受隐私协议/Privacy Notice，导致车控不可用",
+      "triggers": [
+        "privacy policy",
+        "privacy notice",
+        "not accepted",
+        "declined",
+        "accepted but app says not",
+        "隐私协议"
+      ],
+      "scenario_keywords": [
+        "app",
+        "提示未接受隐私协议",
+        "privacy",
+        "notice",
+        "导致车控不可用"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "STATUS-006",
+      "level1": "iSMART相关",
+      "level2": "iSMART-功能咨询",
+      "sub_intent": "ismart_feature_inquiry",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "远程空调温度调节滑块/座椅加热/方向盘加热等功能缺失",
+      "triggers": [
+        "temperature slider",
+        "cannot change temperature",
+        "seat heating missing",
+        "no climate option",
+        "function missing"
+      ],
+      "scenario_keywords": [
+        "远程空调温度调节滑块",
+        "座椅加热",
+        "方向盘加热等功能缺失"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "STATUS-007",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "Charge Management 充电管理页面无数据，但首页有电量等数据",
+      "triggers": [
+        "charge management blank",
+        "no charging data",
+        "charge level not displayed",
+        "battery not shown",
+        "充电管理无数据"
+      ],
+      "scenario_keywords": [
+        "charge",
+        "management",
+        "充电管理页面无数据",
+        "但首页有电量等数据"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-008",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "Error code（具体数字）；车控命令失败但车态可读",
+      "triggers": [
+        "error 59",
+        "request failed 59",
+        "error 47",
+        "remote command failed",
+        "lock unlock failed"
+      ],
+      "scenario_keywords": [
+        "error",
+        "code",
+        "具体数字",
+        "车控命令失败但车态可读"
+      ],
+      "auto_reply_level": "auto_draft_review",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "STATUS-009",
+      "level1": "iSMART相关",
+      "level2": "App-消息中心相关",
+      "sub_intent": "app_messages",
+      "intent": "app_messages",
+      "scenario": "App 异常报警/入侵报警/胎压等通知频繁或疑似误报",
+      "triggers": [
+        "intrusion alert",
+        "alarm notification",
+        "abnormal alert",
+        "tyre notification",
+        "false alarm",
+        "invasion",
+        "报警"
+      ],
+      "scenario_keywords": [
+        "app",
+        "异常报警",
+        "入侵报警",
+        "胎压等通知频繁或疑似误报"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "CHG-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-充电相关",
+      "sub_intent": "non_ismart_charging",
+      "intent": "charging",
+      "scenario": "车辆无法充电、充电中断、V2L 停止、充电口锁扣异常",
+      "triggers": [
+        "will not charge",
+        "charging stopped",
+        "v2l stops",
+        "charger port",
+        "latch",
+        "cannot release",
+        "ac charging current"
+      ],
+      "scenario_keywords": [
+        "车辆无法充电",
+        "充电中断",
+        "v2l",
+        "停止",
+        "充电口锁扣异常"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "charging_diff"
+      ]
+    },
+    {
+      "template_id": "CHG-002",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-充电相关",
+      "sub_intent": "non_ismart_charging",
+      "intent": "charging",
+      "scenario": "满电显示续航下降/电池健康或续航计算疑问",
+      "triggers": [
+        "range reduced",
+        "100% charge",
+        "lost miles",
+        "battery range",
+        "displayed range",
+        "battery health"
+      ],
+      "scenario_keywords": [
+        "满电显示续航下降",
+        "电池健康或续航计算疑问"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "charging_diff"
+      ]
+    },
+    {
+      "template_id": "CHG-003",
+      "level1": "iSMART相关",
+      "level2": "App-车控车态相关",
+      "sub_intent": "app_vehicle_control_status",
+      "intent": "app_vehicle_control",
+      "scenario": "预约充电不执行、时间自动跳变",
+      "triggers": [
+        "scheduled charging",
+        "schedule ignored",
+        "00:00",
+        "22:00",
+        "time shifts",
+        "not charging",
+        "预约充电"
+      ],
+      "scenario_keywords": [
+        "预约充电不执行",
+        "时间自动跳变"
+      ],
+      "auto_reply_level": "auto_draft_review",
+      "required_info": [
+        "basic_vehicle",
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "CHG-004",
+      "level1": "新需求",
+      "level2": "新需求-App-充电历史记录",
+      "sub_intent": "feat_request_charging_history",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望查看充电历史、kWh、电费报销、订阅/流量使用",
+      "triggers": [
+        "charging history",
+        "kwh",
+        "power bill",
+        "charging log",
+        "data usage",
+        "sim status",
+        "subscription"
+      ],
+      "scenario_keywords": [
+        "客户希望查看充电历史",
+        "kwh",
+        "电费报销",
+        "订阅",
+        "流量使用"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "DK-001",
+      "level1": "iSMART相关",
+      "level2": "iSMART-功能咨询",
+      "sub_intent": "ismart_feature_inquiry",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "数字钥匙不可用、找不到选项、无法启动、蓝牙连接失败",
+      "triggers": [
+        "digital key",
+        "keyless start",
+        "smart key not detected",
+        "bluetooth key",
+        "cannot start",
+        "数字钥匙"
+      ],
+      "scenario_keywords": [
+        "数字钥匙不可用",
+        "找不到选项",
+        "无法启动",
+        "蓝牙连接失败"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "MAN-001",
+      "level1": "iSMART相关",
+      "level2": "iSMART-用户手册相关",
+      "sub_intent": "ismart_user_manual",
+      "intent": "ismart_user_manual",
+      "scenario": "App 中找不到用户手册/找不到指定车型/年份语言不对",
+      "triggers": [
+        "user manual",
+        "owner manual",
+        "handbook",
+        "manual not available",
+        "cannot find manual",
+        "用户手册"
+      ],
+      "scenario_keywords": [
+        "app",
+        "中找不到用户手册",
+        "找不到指定车型",
+        "年份语言不对"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "MAN-002",
+      "level1": "iSMART相关",
+      "level2": "iSMART-用户手册相关",
+      "sub_intent": "ismart_user_manual",
+      "intent": "ismart_user_manual",
+      "scenario": "要求下载 PDF 用户手册",
+      "triggers": [
+        "pdf manual",
+        "download manual",
+        "send manual",
+        "manual in pdf",
+        "下载手册"
+      ],
+      "scenario_keywords": [
+        "要求下载",
+        "pdf",
+        "用户手册"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "ACT-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-激活相关",
+      "sub_intent": "ficm_activation",
+      "intent": "ficm_activation",
+      "scenario": "AVN/FICM 未激活、车机激活失败、Security Audit/AES/AVN ID does not exist",
+      "triggers": [
+        "not activated",
+        "avn",
+        "ficm",
+        "aes encrypt",
+        "security audit",
+        "security certificate",
+        "avn id",
+        "car not activated"
+      ],
+      "scenario_keywords": [
+        "avn",
+        "ficm",
+        "未激活",
+        "车机激活失败",
+        "security",
+        "audit",
+        "aes",
+        "avn",
+        "id",
+        "does",
+        "exist"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "avn_activation"
+      ]
+    },
+    {
+      "template_id": "ACT-002",
+      "level1": "iSMART相关",
+      "level2": "FICM-激活相关",
+      "sub_intent": "ficm_activation",
+      "intent": "ficm_activation",
+      "scenario": "Does not have vehicle information / 10001 / 生态应用不可用",
+      "triggers": [
+        "does not have car information",
+        "10001",
+        "vehicle information missing",
+        "spotify",
+        "amazon music",
+        "online services unavailable"
+      ],
+      "scenario_keywords": [
+        "does",
+        "vehicle",
+        "information",
+        "10001",
+        "生态应用不可用"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "avn_activation"
+      ]
+    },
+    {
+      "template_id": "TBOX-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-网络相关",
+      "sub_intent": "ficm_network",
+      "intent": "ismart_connectivity",
+      "scenario": "TBox/TCU 更换后无法绑车或远控，新 TBox 未激活",
+      "triggers": [
+        "tbox replaced",
+        "new tbox",
+        "telematics box",
+        "tcu",
+        "no qr",
+        "cannot bind after replacement",
+        "换件"
+      ],
+      "scenario_keywords": [
+        "tbox",
+        "tcu",
+        "更换后无法绑车或远控",
+        "tbox",
+        "未激活"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "location_map"
+      ]
+    },
+    {
+      "template_id": "CPAA-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-CPAA相关",
+      "sub_intent": "ficm_cpaa",
+      "intent": "ficm_cpaa",
+      "scenario": "Apple CarPlay / Android Auto 断连、无法连接、无线不支持",
+      "triggers": [
+        "carplay",
+        "android auto",
+        "cpaa",
+        "disconnect",
+        "cable",
+        "wireless",
+        "usb",
+        "phone not detected"
+      ],
+      "scenario_keywords": [
+        "apple",
+        "carplay",
+        "android",
+        "auto",
+        "断连",
+        "无法连接",
+        "无线不支持"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "BT-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-蓝牙相关",
+      "sub_intent": "ficm_bluetooth",
+      "intent": "ficm_bluetooth",
+      "scenario": "蓝牙电话对方听不到、音质差、通话几分钟后麦克风失效",
+      "triggers": [
+        "bluetooth call",
+        "hands free",
+        "microphone",
+        "cannot hear me",
+        "distorted",
+        "whistling",
+        "barrel",
+        "disconnects"
+      ],
+      "scenario_keywords": [
+        "蓝牙电话对方听不到",
+        "音质差",
+        "通话几分钟后麦克风失效"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "NET-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-Online Service相关",
+      "sub_intent": "ficm_online_service",
+      "intent": "ismart_connectivity",
+      "scenario": "车机网络有 4G 信号但天气/YouTube/TikTok/在线服务不可用；车载流量/订阅查询",
+      "triggers": [
+        "4g but network unavailable",
+        "data services",
+        "weather",
+        "youtube",
+        "tiktok",
+        "hotspot",
+        "esim",
+        "subscription",
+        "data usage"
+      ],
+      "scenario_keywords": [
+        "车机网络有",
+        "信号但天气",
+        "youtube",
+        "tiktok",
+        "在线服务不可用",
+        "车载流量",
+        "订阅查询"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "location_map"
+      ]
+    },
+    {
+      "template_id": "MAP-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-地图相关",
+      "sub_intent": "ficm_map",
+      "intent": "ficm_map",
+      "scenario": "导航语音语言缺失：意大利语/荷兰语/土耳其语等",
+      "triggers": [
+        "navigation language",
+        "voice guidance",
+        "italian",
+        "dutch",
+        "turkish",
+        "map language",
+        "voice language",
+        "导航语言"
+      ],
+      "scenario_keywords": [
+        "导航语音语言缺失",
+        "意大利语",
+        "荷兰语",
+        "土耳其语等"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "location_map"
+      ]
+    },
+    {
+      "template_id": "MAP-002",
+      "level1": "iSMART相关",
+      "level2": "FICM-地图相关",
+      "sub_intent": "ficm_map",
+      "intent": "ficm_map",
+      "scenario": "地图更新失败、地图资源缺失、导航媒体文件不可用",
+      "triggers": [
+        "map update failed",
+        "media file not available",
+        "map resource",
+        "naviextras",
+        "usb update",
+        "content folder not exist"
+      ],
+      "scenario_keywords": [
+        "地图更新失败",
+        "地图资源缺失",
+        "导航媒体文件不可用"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "location_map"
+      ]
+    },
+    {
+      "template_id": "MAP-003",
+      "level1": "iSMART相关",
+      "level2": "FICM-地图相关",
+      "sub_intent": "ficm_map",
+      "intent": "ficm_map",
+      "scenario": "GPS 定位偏移、Live Traffic/Mapgrade/在线导航数据异常",
+      "triggers": [
+        "gps drift",
+        "location off road",
+        "live traffic",
+        "mapgrade",
+        "here",
+        "traffic data",
+        "wrong country",
+        "navigation stuck"
+      ],
+      "scenario_keywords": [
+        "gps",
+        "定位偏移",
+        "live",
+        "traffic",
+        "mapgrade",
+        "在线导航数据异常"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "location_map"
+      ]
+    },
+    {
+      "template_id": "REG-001",
+      "level1": "iSMART相关",
+      "level2": "iSMART-支持车区域",
+      "sub_intent": "ismart_region_support",
+      "intent": "ismart_region_support",
+      "scenario": "地区不支持、跨区车辆、区域 App 不匹配、标准 iSMART 不可用",
+      "triggers": [
+        "region not supported",
+        "imported",
+        "another country",
+        "cannot use ismart",
+        "malaysia",
+        "turkey",
+        "colombia",
+        "grey import"
+      ],
+      "scenario_keywords": [
+        "地区不支持",
+        "跨区车辆",
+        "区域",
+        "app",
+        "不匹配",
+        "标准",
+        "ismart",
+        "不可用"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "MODEL-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-不支持车型",
+      "sub_intent": "non_ismart_unsupported_model",
+      "intent": "vehicle_incompatible",
+      "scenario": "车型/配置不支持 iSMART 或远控功能",
+      "triggers": [
+        "model not supported",
+        "no ismart",
+        "remote control not supported",
+        "no telematics",
+        "unsupported configuration"
+      ],
+      "scenario_keywords": [
+        "车型",
+        "配置不支持",
+        "ismart",
+        "或远控功能"
+      ],
+      "auto_reply_level": "no_auto_reply",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-软件更新",
+      "sub_intent": "ficm_software_update",
+      "intent": "app_update",
+      "scenario": "客户询问最新娱乐系统/软件版本/是否可更新",
+      "triggers": [
+        "software update",
+        "latest version",
+        "infotainment version",
+        "firmware",
+        "r16",
+        "r27",
+        "update available"
+      ],
+      "scenario_keywords": [
+        "客户询问最新娱乐系统",
+        "软件版本",
+        "是否可更新"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-002",
+      "level1": "iSMART相关",
+      "level2": "FICM-Radio相关",
+      "sub_intent": "ficm_radio",
+      "intent": "ficm_radio",
+      "scenario": "DAB/RDS 电台名称/Logo 不显示、卡住、乱码",
+      "triggers": [
+        "dab",
+        "rds",
+        "radio logo",
+        "station name",
+        "radio freezes",
+        "random characters",
+        "no reception"
+      ],
+      "scenario_keywords": [
+        "dab",
+        "rds",
+        "电台名称",
+        "logo",
+        "不显示",
+        "卡住",
+        "乱码"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-003",
+      "level1": "iSMART相关",
+      "level2": "FICM-界面层级复杂",
+      "sub_intent": "ficm_ui_complexity",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "车机界面文案截断、语言错乱、中文界面、显示黑屏/白屏/重启",
+      "triggers": [
+        "chinese language",
+        "screen blank",
+        "ui cut off",
+        "text truncated",
+        "wrong language",
+        "black screen",
+        "white screen",
+        "reboot"
+      ],
+      "scenario_keywords": [
+        "车机界面文案截断",
+        "语言错乱",
+        "中文界面",
+        "显示黑屏",
+        "白屏",
+        "重启"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "NON-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-车身控制相关",
+      "sub_intent": "non_ismart_body_control",
+      "intent": "hardware_warranty",
+      "scenario": "尾门、车窗、雨刮、钥匙、门锁、灯光、座椅记忆等车身功能异常",
+      "triggers": [
+        "boot",
+        "tailgate",
+        "window",
+        "wiper",
+        "key fob",
+        "door lock",
+        "lights",
+        "seat memory",
+        "mirror",
+        "body control"
+      ],
+      "scenario_keywords": [
+        "尾门",
+        "车窗",
+        "雨刮",
+        "钥匙",
+        "门锁",
+        "灯光",
+        "座椅记忆等车身功能异常"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "NON-002",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-空调相关",
+      "sub_intent": "non_ismart_ac",
+      "intent": "hardware_warranty",
+      "scenario": "车辆本身空调不制冷/不出风/吹热风/热泵问题",
+      "triggers": [
+        "air conditioning stopped",
+        "blowing hot air",
+        "no air from vents",
+        "heat pump",
+        "ventilation",
+        "ac not working"
+      ],
+      "scenario_keywords": [
+        "车辆本身空调不制冷",
+        "不出风",
+        "吹热风",
+        "热泵问题"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "NON-003",
+      "level1": "非iSMART相关",
+      "level2": "ADAS相关",
+      "sub_intent": "adas_general",
+      "intent": "adas_acc",
+      "scenario": "AEB/ACC/LKA/TSR/限速识别/前碰撞误触发/车道辅助异常",
+      "triggers": [
+        "front collision",
+        "aeb",
+        "acc",
+        "lka",
+        "lane assist",
+        "speed sign",
+        "tsr",
+        "speed warning",
+        "cruise control",
+        "adas"
+      ],
+      "scenario_keywords": [
+        "aeb",
+        "acc",
+        "lka",
+        "tsr",
+        "限速识别",
+        "前碰撞误触发",
+        "车道辅助异常"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "NON-004",
+      "level1": "非iSMART相关",
+      "level2": "IPK相关",
+      "sub_intent": "ipk_general",
+      "intent": "hardware_warranty",
+      "scenario": "仪表报警/发动机排放故障/电池系统故障/安全气囊/AVM故障",
+      "triggers": [
+        "warning light",
+        "engine emission",
+        "battery system fault",
+        "airbag",
+        "avm system failure",
+        "dashboard",
+        "ipk"
+      ],
+      "scenario_keywords": [
+        "仪表报警",
+        "发动机排放故障",
+        "电池系统故障",
+        "安全气囊",
+        "avm",
+        "故障"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "NON-005",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-功能咨询",
+      "sub_intent": "non_ismart_feature_inquiry",
+      "intent": "hardware_warranty",
+      "scenario": "车辆功能如何使用：油耗显示、无线 CarPlay、胎压、音响 fader、点烟器位置、保养里程等",
+      "triggers": [
+        "how to",
+        "where can i",
+        "fuel consumption",
+        "wireless charging",
+        "fader",
+        "balance",
+        "tire pressure",
+        "service interval"
+      ],
+      "scenario_keywords": [
+        "车辆功能如何使用",
+        "油耗显示",
+        "无线",
+        "carplay",
+        "胎压",
+        "音响",
+        "fader",
+        "点烟器位置",
+        "保养里程等"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "SVC-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-售前售后服务",
+      "sub_intent": "non_ismart_after_sales_service",
+      "intent": "delivery_handover",
+      "scenario": "保养记录、保修状态、维修进度、服务计划、维修费用、事故维修",
+      "triggers": [
+        "service history",
+        "warranty",
+        "maintenance",
+        "service record",
+        "inspection",
+        "repair status",
+        "recall",
+        "7-year warranty"
+      ],
+      "scenario_keywords": [
+        "保养记录",
+        "保修状态",
+        "维修进度",
+        "服务计划",
+        "维修费用",
+        "事故维修"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "SVC-002",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-售前售后服务",
+      "sub_intent": "non_ismart_after_sales_service",
+      "intent": "delivery_handover",
+      "scenario": "查找附近服务点/授权服务位置/inspection near me",
+      "triggers": [
+        "service location near me",
+        "service near me",
+        "inspection near me",
+        "where can i do service",
+        "mg service"
+      ],
+      "scenario_keywords": [
+        "查找附近服务点",
+        "授权服务位置",
+        "inspection",
+        "near",
+        "me"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "REQ-001",
+      "level1": "新需求",
+      "level2": "新需求-App-Feedback",
+      "sub_intent": "feat_request_app_feedback",
+      "intent": "app_suggestion",
+      "scenario": "App 布局、快捷指令、通知声音、用户配置、Dashcam、常用功能置顶等建议",
+      "triggers": [
+        "suggestion",
+        "feedback",
+        "improve",
+        "shortcuts",
+        "automation",
+        "customize",
+        "dashcam",
+        "notification sound",
+        "home screen"
+      ],
+      "scenario_keywords": [
+        "app",
+        "布局",
+        "快捷指令",
+        "通知声音",
+        "用户配置",
+        "dashcam",
+        "常用功能置顶等建议"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "REQ-002",
+      "level1": "新需求",
+      "level2": "新需求-App-充电提醒",
+      "sub_intent": "feat_request_charging_notification",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望充电停止/未达目标时 App 主动通知",
+      "triggers": [
+        "notify if charging stops",
+        "charging reminder",
+        "charging notification",
+        "stopped before 100",
+        "alert me"
+      ],
+      "scenario_keywords": [
+        "客户希望充电停止",
+        "未达目标时",
+        "app",
+        "主动通知"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "REQ-003",
+      "level1": "新需求",
+      "level2": "新需求-App-远控车窗",
+      "sub_intent": "feat_request_remote_window",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望远程升降车窗/忘关窗可用 App 关闭",
+      "triggers": [
+        "remote window",
+        "close windows remotely",
+        "open windows",
+        "window control app"
+      ],
+      "scenario_keywords": [
+        "客户希望远程升降车窗",
+        "忘关窗可用",
+        "app",
+        "关闭"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "REQ-004",
+      "level1": "新需求",
+      "level2": "新需求-App-总里程",
+      "sub_intent": "feat_request_total_mileage",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "行车日志、旅程记录、总里程、油耗统计、公司车管理",
+      "triggers": [
+        "driving log",
+        "trip log",
+        "mileage log",
+        "total mileage",
+        "fuel cost",
+        "company car",
+        "consumption statistics"
+      ],
+      "scenario_keywords": [
+        "行车日志",
+        "旅程记录",
+        "总里程",
+        "油耗统计",
+        "公司车管理"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "CLOSE-001",
+      "level1": "关闭",
+      "level2": "关闭-已解决",
+      "sub_intent": "close_resolved",
+      "intent": "follow_up_resolved",
+      "scenario": "客户回复问题已解决/正常工作",
+      "triggers": [
+        "resolved",
+        "working now",
+        "all good",
+        "thank you",
+        "problem solved",
+        "已解决"
+      ],
+      "scenario_keywords": [
+        "客户回复问题已解决",
+        "正常工作"
+      ],
+      "auto_reply_level": "auto_draft_and_close",
+      "required_info": []
+    },
+    {
+      "template_id": "CLOSE-002",
+      "level1": "关闭",
+      "level2": "关闭-无效邮件",
+      "sub_intent": "close_invalid",
+      "intent": "other",
+      "scenario": "无有效内容、无法理解、乱码、仅问候、相同发件人且相同正文",
+      "triggers": [
+        "hi",
+        "hello",
+        "unclear",
+        "random text",
+        "cannot understand",
+        "no issue"
+      ],
+      "scenario_keywords": [
+        "无有效内容",
+        "无法理解",
+        "乱码",
+        "仅问候",
+        "相同发件人且相同正文"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": []
+    },
+    {
+      "template_id": "APP-MAP-001",
+      "level1": "iSMART相关",
+      "level2": "App-地图相关",
+      "sub_intent": "app_map",
+      "intent": "app_vehicle_control",
+      "scenario": "App地图、车辆位置、发送目的地、找充电站/兴趣点等 App 地图功能异常",
+      "triggers": [
+        "app map",
+        "find my car",
+        "send destination",
+        "poi",
+        "charging station",
+        "vehicle location",
+        "map in app",
+        "destination"
+      ],
+      "scenario_keywords": [
+        "app",
+        "地图",
+        "车辆位置",
+        "发送目的地",
+        "找充电站",
+        "兴趣点等",
+        "app",
+        "地图功能异常"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "APP-ENERGY-001",
+      "level1": "iSMART相关",
+      "level2": "App-能耗统计相关",
+      "sub_intent": "app_energy_stats",
+      "intent": "app_vehicle_control",
+      "scenario": "App 能耗、统计、油耗/电耗、行程统计不显示或不准确",
+      "triggers": [
+        "energy statistics",
+        "consumption",
+        "fuel consumption",
+        "electric consumption",
+        "statistics",
+        "trip data",
+        "能耗统计"
+      ],
+      "scenario_keywords": [
+        "app",
+        "能耗",
+        "统计",
+        "油耗",
+        "电耗",
+        "行程统计不显示或不准确"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "APP-CHGMODE-001",
+      "level1": "iSMART相关",
+      "level2": "App-无法记忆充电模式",
+      "sub_intent": "app_charging_mode_not_saved",
+      "intent": "app_vehicle_control",
+      "scenario": "充电目标/模式保存后恢复默认，如 100% 回到 80%",
+      "triggers": [
+        "charging mode not saved",
+        "target level resets",
+        "80%",
+        "100%",
+        "save setting",
+        "cannot remember charging mode"
+      ],
+      "scenario_keywords": [
+        "充电目标",
+        "模式保存后恢复默认",
+        "100",
+        "回到",
+        "80"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "APP-BODYIMG-001",
+      "level1": "iSMART相关",
+      "level2": "App-车体图相关",
+      "sub_intent": "app_vehicle_image",
+      "intent": "app_vehicle_control",
+      "scenario": "App 车辆图片、颜色、VIN、车型图显示不符",
+      "triggers": [
+        "vehicle color wrong",
+        "car image wrong",
+        "white image",
+        "wrong vin shown",
+        "vehicle picture",
+        "body image"
+      ],
+      "scenario_keywords": [
+        "app",
+        "车辆图片",
+        "颜色",
+        "vin",
+        "车型图显示不符"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "APP-GUIDE-001",
+      "level1": "iSMART相关",
+      "level2": "App-引导手册",
+      "sub_intent": "app_guide_manual",
+      "intent": "ismart_user_manual",
+      "scenario": "客户需要绑车教程",
+      "triggers": [
+        "how to bind",
+        "binding tutorial",
+        "guide",
+        "instructions"
+      ],
+      "scenario_keywords": [
+        "客户需要绑车教程"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "APP-GUIDE-002",
+      "level1": "iSMART相关",
+      "level2": "App-引导手册",
+      "sub_intent": "app_guide_manual",
+      "intent": "ismart_user_manual",
+      "scenario": "二级账号/副账号设置教程",
+      "triggers": [
+        "secondary account，main account；secondary account，主关键词 secondary account second account 2nd account additional account another account family account sub account sub-account 场景关键词 add my partner add my wife add my husband add family member add another user add second user invite user share vehicle share car vehicle sharing grant access authorize user / authorise user two phones same car on two phones use the app on another phone"
+      ],
+      "scenario_keywords": [
+        "二级账号",
+        "副账号设置教程"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "APP-SW-001",
+      "level1": "iSMART相关",
+      "level2": "App-软件更新",
+      "sub_intent": "app_update",
+      "intent": "app_update",
+      "scenario": "App 版本更新、App 安装/打不开/崩溃/缓存问题",
+      "triggers": [
+        "app update",
+        "latest app",
+        "app crashes",
+        "app cannot open",
+        "clear cache",
+        "reinstall",
+        "app version"
+      ],
+      "scenario_keywords": [
+        "app",
+        "版本更新",
+        "app",
+        "安装",
+        "打不开",
+        "崩溃",
+        "缓存问题"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "app_tech"
+      ]
+    },
+    {
+      "template_id": "TSP-001",
+      "level1": "iSMART相关",
+      "level2": "TSP-车辆信息缺失",
+      "sub_intent": "tsp_data_missing",
+      "intent": "tsp_data_missing",
+      "scenario": "后台/云端车辆信息缺失，App 或车机提示无车辆信息",
+      "triggers": [
+        "vehicle information missing",
+        "no vehicle data",
+        "car information",
+        "data missing",
+        "tsp",
+        "no vehicle found"
+      ],
+      "scenario_keywords": [
+        "后台",
+        "云端车辆信息缺失",
+        "app",
+        "或车机提示无车辆信息"
+      ],
+      "auto_reply_level": "auto_draft_review",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "TSP-002",
+      "level1": "iSMART相关",
+      "level2": "TSP-敏感数据要求",
+      "sub_intent": "tsp_sensitive_data",
+      "intent": "tsp_sensitive_data",
+      "scenario": "客户要求历史定位、报警记录、服务记录、个人/车辆数据导出",
+      "triggers": [
+        "send data",
+        "alarm messages",
+        "gps history",
+        "service history",
+        "personal data",
+        "gdpr",
+        "data request"
+      ],
+      "scenario_keywords": [
+        "客户要求历史定位",
+        "报警记录",
+        "服务记录",
+        "个人",
+        "车辆数据导出"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-MUSIC-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-Music相关",
+      "sub_intent": "ficm_music",
+      "intent": "ismart_music_streaming",
+      "scenario": "Amazon Music/Spotify/在线音乐不可用、应用缺失",
+      "triggers": [
+        "amazon music",
+        "spotify",
+        "music",
+        "live streaming",
+        "online music",
+        "built-in music"
+      ],
+      "scenario_keywords": [
+        "amazon",
+        "music",
+        "spotify",
+        "在线音乐不可用",
+        "应用缺失"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-VOICE-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-Voice Service相关",
+      "sub_intent": "ficm_voice",
+      "intent": "ficm_voice",
+      "scenario": "Hello MG/语音助手不可用、语音语言不支持",
+      "triggers": [
+        "hello mg",
+        "voice command",
+        "voice assistant",
+        "voice language",
+        "italian voice",
+        "dutch voice"
+      ],
+      "scenario_keywords": [
+        "hello",
+        "mg",
+        "语音助手不可用",
+        "语音语言不支持"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-VOLUME-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-Volume相关",
+      "sub_intent": "ficm_volume",
+      "intent": "ficm_radio",
+      "scenario": "导航声音、收音机被导航打断、音量/静音设置问题",
+      "triggers": [
+        "navigation sound",
+        "radio sound holes",
+        "volume",
+        "mute",
+        "voice alerts",
+        "sound signal"
+      ],
+      "scenario_keywords": [
+        "导航声音",
+        "收音机被导航打断",
+        "音量",
+        "静音设置问题"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-REMEMBER-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-无法记忆驾驶模式",
+      "sub_intent": "ficm_driving_mode_not_saved",
+      "intent": "hardware_warranty",
+      "scenario": "驾驶模式、MG Pilot、自定义设置、限速报警每次重启恢复默认",
+      "triggers": [
+        "driving mode not saved",
+        "mg pilot",
+        "custom mode",
+        "overspeed warning",
+        "resets after restart",
+        "default mode"
+      ],
+      "scenario_keywords": [
+        "驾驶模式",
+        "mg",
+        "pilot",
+        "自定义设置",
+        "限速报警每次重启恢复默认"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FICM-PRIV-002",
+      "level1": "iSMART相关",
+      "level2": "FICM-隐私协议相关",
+      "sub_intent": "ismart_privacy",
+      "intent": "ismart_privacy",
+      "scenario": "隐私状态频繁接受/拒绝跳变、App 多次推送隐私通知",
+      "triggers": [
+        "privacy accepted declined",
+        "repeated privacy notification",
+        "agreement status changes",
+        "privacy messages"
+      ],
+      "scenario_keywords": [
+        "隐私状态频繁接受",
+        "拒绝跳变",
+        "app",
+        "多次推送隐私通知"
+      ],
+      "auto_reply_level": "auto_draft_review",
+      "required_info": []
+    },
+    {
+      "template_id": "FICM-REBOOT-001",
+      "level1": "iSMART相关",
+      "level2": "FICM-自动重启",
+      "sub_intent": "ficm_auto_reboot",
+      "intent": "hardware_warranty",
+      "scenario": "车机自动重启、卡死、循环重启",
+      "triggers": [
+        "infotainment restarts",
+        "keeps rebooting",
+        "crashes",
+        "freezes then restarts",
+        "automatic restart"
+      ],
+      "scenario_keywords": [
+        "车机自动重启",
+        "卡死",
+        "循环重启"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "ISMT-TRAN-001",
+      "level1": "iSMART相关",
+      "level2": "iSMART-翻译相关",
+      "sub_intent": "ismart_translation",
+      "intent": "ismart_translation",
+      "scenario": "App/车机翻译错误、文案不准确、按钮显示手机号码但应为邮箱等",
+      "triggers": [
+        "translation",
+        "wrong text",
+        "language error",
+        "should say email",
+        "wording",
+        "truncated text",
+        "翻译"
+      ],
+      "scenario_keywords": [
+        "app",
+        "车机翻译错误",
+        "文案不准确",
+        "按钮显示手机号码但应为邮箱等"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "FOTA-001",
+      "level1": "新需求",
+      "level2": "新需求-OTA升级",
+      "sub_intent": "feat_request_ota",
+      "intent": "ismart_fota",
+      "scenario": "客户希望 OTA 更新、询问是否支持 OTA、地图是否 OTA",
+      "triggers": [
+        "ota",
+        "over the air",
+        "fota",
+        "online update",
+        "update remotely",
+        "map ota"
+      ],
+      "scenario_keywords": [
+        "客户希望",
+        "ota",
+        "更新",
+        "询问是否支持",
+        "ota",
+        "地图是否",
+        "ota"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-CHGPOWER-001",
+      "level1": "新需求",
+      "level2": "新需求-FICM/App-可调充电功率",
+      "sub_intent": "feat_request_adjustable_charging_power",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望在 App/车机调节充电功率/电流",
+      "triggers": [
+        "adjust charging power",
+        "charging current",
+        "max current",
+        "15a",
+        "3a",
+        "charge power setting"
+      ],
+      "scenario_keywords": [
+        "客户希望在",
+        "app",
+        "车机调节充电功率",
+        "电流"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-WATCH-001",
+      "level1": "新需求",
+      "level2": "新需求-Watch版App",
+      "sub_intent": "feat_request_watch_app",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望手表 App/Apple Watch 操作车辆",
+      "triggers": [
+        "watch app",
+        "apple watch",
+        "smartwatch",
+        "watch version"
+      ],
+      "scenario_keywords": [
+        "客户希望手表",
+        "app",
+        "apple",
+        "watch",
+        "操作车辆"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NON-006",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-充电相关",
+      "sub_intent": "non_ismart_charging",
+      "intent": "charging",
+      "scenario": "充电速度低、快充功率达不到宣传/桩额定功率",
+      "triggers": [
+        "charging speed",
+        "charging power",
+        "kw",
+        "supercharger",
+        "fast charger",
+        "only 50kw",
+        "slow charging"
+      ],
+      "scenario_keywords": [
+        "充电速度低",
+        "快充功率达不到宣传",
+        "桩额定功率"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "charging_diff"
+      ]
+    },
+    {
+      "template_id": "NON-007",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-车身控制相关",
+      "sub_intent": "non_ismart_body_control",
+      "intent": "hardware_warranty",
+      "scenario": "钥匙丢失、钥匙锁车内、无法开门/启动车辆",
+      "triggers": [
+        "lost key",
+        "key locked in car",
+        "smart key not recognized",
+        "cannot open car",
+        "cannot start car"
+      ],
+      "scenario_keywords": [
+        "钥匙丢失",
+        "钥匙锁车内",
+        "无法开门",
+        "启动车辆"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "NON-008",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-空调相关",
+      "sub_intent": "non_ismart_ac",
+      "intent": "hardware_warranty",
+      "scenario": "远程空调触发车内报警/入侵报警",
+      "triggers": [
+        "remote climate alarm",
+        "intrusion alarm when ac starts",
+        "alarm goes off",
+        "illega invasion"
+      ],
+      "scenario_keywords": [
+        "远程空调触发车内报警",
+        "入侵报警"
+      ],
+      "auto_reply_level": "auto_draft_needs_info",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "ADAS-ACC-001",
+      "level1": "非iSMART相关",
+      "level2": "Adas-ACC",
+      "sub_intent": "adas_acc",
+      "intent": "adas_acc",
+      "scenario": "自适应巡航、巡航控制、拖车/自行车架导致巡航不可用",
+      "triggers": [
+        "acc",
+        "adaptive cruise",
+        "cruise control",
+        "bike rack",
+        "towbar",
+        "cruise not working"
+      ],
+      "scenario_keywords": [
+        "自适应巡航",
+        "巡航控制",
+        "拖车",
+        "自行车架导致巡航不可用"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "ADAS-AEB-001",
+      "level1": "非iSMART相关",
+      "level2": "Adas-AEB",
+      "sub_intent": "adas_aeb",
+      "intent": "adas_aeb",
+      "scenario": "前碰撞/自动刹车误触发或不触发",
+      "triggers": [
+        "aeb",
+        "front collision",
+        "emergency braking",
+        "brakes hard",
+        "false braking",
+        "collision assistance"
+      ],
+      "scenario_keywords": [
+        "前碰撞",
+        "自动刹车误触发或不触发"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "ADAS-LKA-001",
+      "level1": "非iSMART相关",
+      "level2": "Adas-LKA",
+      "sub_intent": "adas_lka",
+      "intent": "adas_lka",
+      "scenario": "车道保持/方向盘自动偏转/车辆向左偏",
+      "triggers": [
+        "lka",
+        "lane keeping",
+        "steering left",
+        "drifts left",
+        "harsh turns",
+        "lane departure"
+      ],
+      "scenario_keywords": [
+        "车道保持",
+        "方向盘自动偏转",
+        "车辆向左偏"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "ADAS-TJA-001",
+      "level1": "非iSMART相关",
+      "level2": "Adas-TJA",
+      "sub_intent": "adas_tja",
+      "intent": "adas_tja",
+      "scenario": "交通拥堵辅助/车道居中/低速辅助异常",
+      "triggers": [
+        "tja",
+        "traffic jam assist",
+        "lane centering",
+        "low speed assist"
+      ],
+      "scenario_keywords": [
+        "交通拥堵辅助",
+        "车道居中",
+        "低速辅助异常"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "IPK-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-IPK相关",
+      "sub_intent": "non_ismart_ipk",
+      "intent": "hardware_warranty",
+      "scenario": "仪表语言/时间/温度/里程显示、故障提示等 IPK 问题",
+      "triggers": [
+        "dashboard",
+        "instrument cluster",
+        "ipk",
+        "display chinese",
+        "clock",
+        "mileage reset",
+        "warning sign"
+      ],
+      "scenario_keywords": [
+        "仪表语言",
+        "时间",
+        "温度",
+        "里程显示",
+        "故障提示等",
+        "ipk",
+        "问题"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "non_ismart"
+      ]
+    },
+    {
+      "template_id": "SVC-003",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-售前售后服务",
+      "sub_intent": "non_ismart_after_sales_service",
+      "intent": "delivery_handover",
+      "scenario": "车漆、轮毂、玻璃、灯罩进水、内饰磨损等",
+      "triggers": [
+        "paint peeling",
+        "alloy wheel",
+        "cracked glass",
+        "moisture in lights",
+        "steering wheel peeling",
+        "warranty claim"
+      ],
+      "scenario_keywords": [
+        "车漆",
+        "轮毂",
+        "玻璃",
+        "灯罩进水",
+        "内饰磨损等"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "UNSUP-001",
+      "level1": "非iSMART相关",
+      "level2": "非iSMART-不支持车型",
+      "sub_intent": "non_ismart_unsupported_model",
+      "intent": "vehicle_incompatible",
+      "scenario": "车辆不是我方负责制造/后台搜不到/Maxus或其他品牌 App 不兼容",
+      "triggers": [
+        "not in database",
+        "vehicle not found",
+        "maxus",
+        "not mg ismart",
+        "unsupported vehicle"
+      ],
+      "scenario_keywords": [
+        "车辆不是我方负责制造",
+        "后台搜不到",
+        "maxus",
+        "或其他品牌",
+        "app",
+        "不兼容"
+      ],
+      "auto_reply_level": "auto_draft_review",
+      "required_info": [
+        "basic_vehicle"
+      ]
+    },
+    {
+      "template_id": "NEW-MULTI-001",
+      "level1": "新需求",
+      "level2": "新需求-App-多账号绑车",
+      "sub_intent": "feat_request_multi_account_binding",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "客户希望多个主账号绑定同一辆车，不想用副账号",
+      "triggers": [
+        "two accounts",
+        "multiple accounts",
+        "both users",
+        "partner account",
+        "share car",
+        "family account"
+      ],
+      "scenario_keywords": [
+        "客户希望多个主账号绑定同一辆车",
+        "不想用副账号"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-THEME-001",
+      "level1": "新需求",
+      "level2": "新需求-App-多主题切换",
+      "sub_intent": "feat_request_theme_switching",
+      "intent": "app_suggestion",
+      "scenario": "App 主题/深浅色/界面自定义诉求",
+      "triggers": [
+        "theme",
+        "dark mode",
+        "light mode",
+        "display theme",
+        "customize app"
+      ],
+      "scenario_keywords": [
+        "app",
+        "主题",
+        "深浅色",
+        "界面自定义诉求"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-SPLIT-CHG-001",
+      "level1": "新需求",
+      "level2": "新需求-App-分时段预约充电",
+      "sub_intent": "feat_request_split_charging_schedule",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "希望多个时间段预约充电/复杂电价策略",
+      "triggers": [
+        "multiple charging schedules",
+        "time slots",
+        "off peak",
+        "tariff",
+        "split schedule"
+      ],
+      "scenario_keywords": [
+        "希望多个时间段预约充电",
+        "复杂电价策略"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-SERVICE-001",
+      "level1": "新需求",
+      "level2": "新需求-App-预约维保",
+      "sub_intent": "feat_request_service_booking",
+      "intent": "delivery_handover",
+      "scenario": "希望 App 预约保养/查看服务计划",
+      "triggers": [
+        "book service in app",
+        "service appointment",
+        "maintenance booking",
+        "schedule inspection"
+      ],
+      "scenario_keywords": [
+        "希望",
+        "app",
+        "预约保养",
+        "查看服务计划"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-SEAT-001",
+      "level1": "新需求",
+      "level2": "新需求-App-预约座椅加热",
+      "sub_intent": "feat_request_seat_heating_schedule",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "希望预约座椅加热/远程座椅加热",
+      "triggers": [
+        "schedule seat heating",
+        "remote seat heating",
+        "seat heater timer"
+      ],
+      "scenario_keywords": [
+        "希望预约座椅加热",
+        "远程座椅加热"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-LIGHT-001",
+      "level1": "新需求",
+      "level2": "新需求-App-远控关灯",
+      "sub_intent": "feat_request_remote_lights",
+      "intent": "ismart_feature_inquiry",
+      "scenario": "希望 App 远程关闭车灯/灯光控制",
+      "triggers": [
+        "remote lights",
+        "turn off lights",
+        "remote lamp",
+        "lights left on"
+      ],
+      "scenario_keywords": [
+        "希望",
+        "app",
+        "远程关闭车灯",
+        "灯光控制"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "NEW-EVTRIP-001",
+      "level1": "新需求",
+      "level2": "新需求-FICM- EV Trip Planner",
+      "sub_intent": "feat_request_ev_trip_planner",
+      "intent": "ismart_connectivity",
+      "scenario": "EV Trip Planner、路线规划、从手机发送路线到车机",
+      "triggers": [
+        "ev trip planner",
+        "route planner",
+        "send route",
+        "travel plan",
+        "destination to car"
+      ],
+      "scenario_keywords": [
+        "ev",
+        "trip",
+        "planner",
+        "路线规划",
+        "从手机发送路线到车机"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": []
+    },
+    {
+      "template_id": "CHG-SCHED-001",
+      "level1": "iSMART相关",
+      "level2": "App-预约充电相关",
+      "sub_intent": "app_charging_schedule",
+      "intent": "app_vehicle_control",
+      "scenario": "客户问如何在 App 设置充电时段（off-peak）",
+      "triggers": [
+        "schedule charging",
+        "off-peak charging",
+        "charging schedule",
+        "set charging time",
+        "off peak hours",
+        "charging timer",
+        "预约充电",
+        "充电时段",
+        "定时充电",
+        "分时段充电"
+      ],
+      "scenario_keywords": [
+        "客户问如何在",
+        "app",
+        "设置充电时段",
+        "off",
+        "peak"
+      ],
+      "auto_reply_level": "auto_draft_safe",
+      "required_info": [
+        "app_tech"
+      ]
+    }
+  ],
+  "keyword_index": {
+    "help": [
+      "GEN-001"
+    ],
+    "not working": [
+      "GEN-001"
+    ],
+    "issue": [
+      "GEN-001"
+    ],
+    "problem": [
+      "GEN-001"
+    ],
+    "cannot use": [
+      "GEN-001"
+    ],
+    "app not working": [
+      "GEN-001"
+    ],
+    "no details": [
+      "GEN-001"
+    ],
+    "【缺少信息】": [
+      "GEN-001"
+    ],
+    "客户描述过于笼统": [
+      "GEN-001"
+    ],
+    "无法判断问题": [
+      "GEN-001"
+    ],
+    "需要基础信息后再查后台或分析": [
+      "GEN-001"
+    ],
+    "vin missing": [
+      "GEN-002"
+    ],
+    "chassis number": [
+      "GEN-002"
+    ],
+    "vehicle number": [
+      "GEN-002"
+    ],
+    "registration only": [
+      "GEN-002"
+    ],
+    "plate only": [
+      "GEN-002"
+    ],
+    "where is vin": [
+      "GEN-002"
+    ],
+    "vin码位置": [
+      "GEN-002"
+    ],
+    "客户未提供": [
+      "GEN-002"
+    ],
+    "vin": [
+      "GEN-002",
+      "GEN-003",
+      "GEN-005",
+      "APP-BODYIMG-001"
+    ],
+    "17": [
+      "GEN-002"
+    ],
+    "客户把": [
+      "GEN-002"
+    ],
+    "理解为车牌号": [
+      "GEN-002"
+    ],
+    "需要引导客户找到": [
+      "GEN-002"
+    ],
+    "vin incorrect": [
+      "GEN-003"
+    ],
+    "vin not found": [
+      "GEN-003"
+    ],
+    "wrong vin": [
+      "GEN-003"
+    ],
+    "不是17位": [
+      "GEN-003"
+    ],
+    "查询不到": [
+      "GEN-003"
+    ],
+    "chassis invalid": [
+      "GEN-003"
+    ],
+    "客户提供的": [
+      "GEN-003"
+    ],
+    "查询不到或照片不是车辆": [
+      "GEN-003"
+    ],
+    "unclear error": [
+      "GEN-004"
+    ],
+    "unclear issue": [
+      "GEN-004"
+    ],
+    "no error message": [
+      "GEN-004"
+    ],
+    "no error code": [
+      "GEN-004"
+    ],
+    "unknown error": [
+      "GEN-004"
+    ],
+    "failed but no details": [
+      "GEN-004"
+    ],
+    "not sure what happened": [
+      "GEN-004"
+    ],
+    "cannot describe clearly": [
+      "GEN-004"
+    ],
+    "issue occurs randomly": [
+      "GEN-004"
+    ],
+    "intermittent issue": [
+      "GEN-004"
+    ],
+    "cannot reproduce": [
+      "GEN-004"
+    ],
+    "no visible error": [
+      "GEN-004"
+    ],
+    "nothing shown": [
+      "GEN-004"
+    ],
+    "app not working but no details": [
+      "GEN-004"
+    ],
+    "vehicle not working but no details": [
+      "GEN-004"
+    ],
+    "app or infotainment unclear": [
+      "GEN-004"
+    ],
+    "unclear whether app or car screen": [
+      "GEN-004"
+    ],
+    "which function is affected unclear": [
+      "GEN-004"
+    ],
+    "need full operation process": [
+      "GEN-004"
+    ],
+    "problem not visible from description": [
+      "GEN-004"
+    ],
+    "need evidence to confirm": [
+      "GEN-004"
+    ],
+    "cannot identify the affected function": [
+      "GEN-004"
+    ],
+    "cannot identify the error page": [
+      "GEN-004"
+    ],
+    "文字描述不足": [
+      "GEN-004"
+    ],
+    "需要看到完整操作路径和报错": [
+      "GEN-004"
+    ],
+    "已收到": [
+      "GEN-005"
+    ],
+    "视频": [
+      "GEN-005"
+    ],
+    "截图": [
+      "GEN-005"
+    ],
+    "需要技术团队继续排查": [
+      "GEN-005"
+    ],
+    "logged in on another device": [
+      "ACC-001"
+    ],
+    "different device": [
+      "ACC-001"
+    ],
+    "account active": [
+      "ACC-001"
+    ],
+    "kicked out": [
+      "ACC-001"
+    ],
+    "logs me out": [
+      "ACC-001"
+    ],
+    "another app": [
+      "ACC-001"
+    ],
+    "另一台设备": [
+      "ACC-001"
+    ],
+    "账号提示在另一台设备登录": [
+      "ACC-001"
+    ],
+    "被踢下线": [
+      "ACC-001"
+    ],
+    "频繁要求重新登录": [
+      "ACC-001"
+    ],
+    "forgot password": [
+      "ACC-002"
+    ],
+    "reset password": [
+      "ACC-002"
+    ],
+    "verification code": [
+      "ACC-002",
+      "ACC-004"
+    ],
+    "password wrong": [
+      "ACC-002"
+    ],
+    "cannot reset": [
+      "ACC-002"
+    ],
+    "expired email": [
+      "ACC-002"
+    ],
+    "忘记密码": [
+      "ACC-002"
+    ],
+    "忘记登录密码": [
+      "ACC-002"
+    ],
+    "重置密码": [
+      "ACC-002"
+    ],
+    "无法设置新密码": [
+      "ACC-002"
+    ],
+    "verification email not received": [
+      "ACC-003"
+    ],
+    "code expired": [
+      "ACC-003"
+    ],
+    "email expired": [
+      "ACC-003"
+    ],
+    "no email": [
+      "ACC-003"
+    ],
+    "resend code": [
+      "ACC-003"
+    ],
+    "verify account": [
+      "ACC-003"
+    ],
+    "注册或重置时收不到邮箱验证码": [
+      "ACC-003"
+    ],
+    "验证链接过期": [
+      "ACC-003"
+    ],
+    "pin": [
+      "ACC-004"
+    ],
+    "security code": [
+      "ACC-004"
+    ],
+    "passcode": [
+      "ACC-004"
+    ],
+    "4 digit code": [
+      "ACC-004"
+    ],
+    "code to bind": [
+      "ACC-004"
+    ],
+    "忘记pin": [
+      "ACC-004"
+    ],
+    "忘记": [
+      "ACC-004"
+    ],
+    "安全码": [
+      "ACC-004"
+    ],
+    "远控码": [
+      "ACC-004"
+    ],
+    "或绑车时被要求输入": [
+      "ACC-004"
+    ],
+    "change mobile number": [
+      "ACC-005"
+    ],
+    "change email": [
+      "ACC-005"
+    ],
+    "new phone": [
+      "ACC-005"
+    ],
+    "lost phone": [
+      "ACC-005"
+    ],
+    "new handset": [
+      "ACC-005"
+    ],
+    "changed phone": [
+      "ACC-005"
+    ],
+    "更换手机": [
+      "ACC-005"
+    ],
+    "更换手机号": [
+      "ACC-005"
+    ],
+    "邮箱": [
+      "ACC-005"
+    ],
+    "新手机登录": [
+      "ACC-005"
+    ],
+    "already bound": [
+      "BIND-001"
+    ],
+    "previous owner": [
+      "BIND-001"
+    ],
+    "used car": [
+      "BIND-001"
+    ],
+    "force unbind": [
+      "BIND-001"
+    ],
+    "cannot bind": [
+      "BIND-001"
+    ],
+    "vehicle bound": [
+      "BIND-001"
+    ],
+    "已绑定": [
+      "BIND-001"
+    ],
+    "二手车": [
+      "BIND-001"
+    ],
+    "新车扫码提示车辆已绑定": [
+      "BIND-001"
+    ],
+    "需要解绑前任车主": [
+      "BIND-001"
+    ],
+    "not bound": [
+      "BIND-002"
+    ],
+    "no account": [
+      "BIND-002"
+    ],
+    "no binding": [
+      "BIND-002"
+    ],
+    "qr scanned no result": [
+      "BIND-002"
+    ],
+    "still asks to bind": [
+      "BIND-002"
+    ],
+    "没有绑定账号": [
+      "BIND-002"
+    ],
+    "后台显示车辆未绑定任何账号": [
+      "BIND-002"
+    ],
+    "但客户仍无法绑车": [
+      "BIND-002"
+    ],
+    "bound to account": [
+      "BIND-003"
+    ],
+    "is this your account": [
+      "BIND-003"
+    ],
+    "confirm account": [
+      "BIND-003"
+    ],
+    "currently bound": [
+      "BIND-003"
+    ],
+    "后台显示已绑定到某账号": [
+      "BIND-003"
+    ],
+    "需要客户确认是否本人": [
+      "BIND-003"
+    ],
+    "是否已自行解决问题": [
+      "BIND-003"
+    ],
+    "unbound successfully": [
+      "BIND-004"
+    ],
+    "removed previous owner": [
+      "BIND-004"
+    ],
+    "unlink completed": [
+      "BIND-004"
+    ],
+    "解绑成功": [
+      "BIND-004"
+    ],
+    "已成功解绑前任车主": [
+      "BIND-004"
+    ],
+    "客户请求解绑已完成": [
+      "BIND-004"
+    ],
+    "time zone": [
+      "BIND-005"
+    ],
+    "date time": [
+      "BIND-005"
+    ],
+    "time beam": [
+      "BIND-005"
+    ],
+    "check date and time": [
+      "BIND-005"
+    ],
+    "binding failed": [
+      "BIND-005"
+    ],
+    "日期": [
+      "BIND-005"
+    ],
+    "时区": [
+      "BIND-005"
+    ],
+    "扫码绑车提示日期": [
+      "BIND-005"
+    ],
+    "时间": [
+      "BIND-005",
+      "IPK-001"
+    ],
+    "时区错误": [
+      "BIND-005"
+    ],
+    "two vehicles": [
+      "BIND-006"
+    ],
+    "remove old car": [
+      "BIND-006"
+    ],
+    "vehicle management": [
+      "BIND-006"
+    ],
+    "add vehicle": [
+      "BIND-006"
+    ],
+    "multiple cars": [
+      "BIND-006"
+    ],
+    "删除车辆": [
+      "BIND-006"
+    ],
+    "多辆车": [
+      "BIND-006"
+    ],
+    "一个账号下多辆车": [
+      "BIND-006"
+    ],
+    "删除不属于自己的车辆": [
+      "BIND-006"
+    ],
+    "车辆管理位置": [
+      "BIND-006"
+    ],
+    "stuck": [
+      "STATUS-001"
+    ],
+    "frozen": [
+      "STATUS-001"
+    ],
+    "old data": [
+      "STATUS-001"
+    ],
+    "not updating": [
+      "STATUS-001"
+    ],
+    "wrong mileage": [
+      "STATUS-001"
+    ],
+    "wrong battery": [
+      "STATUS-001"
+    ],
+    "location old": [
+      "STATUS-001"
+    ],
+    "app frozen": [
+      "STATUS-001"
+    ],
+    "车态不更新": [
+      "STATUS-001"
+    ],
+    "app": [
+      "STATUS-001",
+      "STATUS-002",
+      "STATUS-004",
+      "STATUS-005",
+      "STATUS-009",
+      "MAN-001",
+      "REG-001",
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "APP-MAP-001",
+      "APP-ENERGY-001",
+      "APP-BODYIMG-001",
+      "APP-SW-001",
+      "TSP-001",
+      "FICM-PRIV-002",
+      "ISMT-TRAN-001",
+      "NEW-CHGPOWER-001",
+      "NEW-WATCH-001",
+      "UNSUP-001",
+      "NEW-THEME-001",
+      "NEW-SERVICE-001",
+      "NEW-LIGHT-001",
+      "CHG-SCHED-001"
+    ],
+    "显示旧数据": [
+      "STATUS-001"
+    ],
+    "里程": [
+      "STATUS-001"
+    ],
+    "电量": [
+      "STATUS-001"
+    ],
+    "位置不一致": [
+      "STATUS-001"
+    ],
+    "vehicle not responded": [
+      "STATUS-002"
+    ],
+    "request timeout": [
+      "STATUS-002"
+    ],
+    "car not responding": [
+      "STATUS-002"
+    ],
+    "sleep mode": [
+      "STATUS-002"
+    ],
+    "remote command failed": [
+      "STATUS-002",
+      "STATUS-008"
+    ],
+    "no response": [
+      "STATUS-002"
+    ],
+    "显示": [
+      "STATUS-002"
+    ],
+    "vehicle": [
+      "STATUS-002",
+      "ACT-002"
+    ],
+    "responded": [
+      "STATUS-002"
+    ],
+    "远控超时": [
+      "STATUS-002"
+    ],
+    "车辆锁车后短时间不可达": [
+      "STATUS-002"
+    ],
+    "network unavailable": [
+      "STATUS-003"
+    ],
+    "weak signal": [
+      "STATUS-003"
+    ],
+    "no connection": [
+      "STATUS-003"
+    ],
+    "2g": [
+      "STATUS-003"
+    ],
+    "4g no data": [
+      "STATUS-003"
+    ],
+    "telematics": [
+      "STATUS-003"
+    ],
+    "tbox": [
+      "STATUS-003",
+      "TBOX-001"
+    ],
+    "tcu": [
+      "STATUS-003",
+      "TBOX-001"
+    ],
+    "network issue": [
+      "STATUS-003"
+    ],
+    "网络不稳定": [
+      "STATUS-003"
+    ],
+    "远控失败": [
+      "STATUS-003"
+    ],
+    "疑似": [
+      "STATUS-003"
+    ],
+    "网络问题": [
+      "STATUS-003"
+    ],
+    "remote climate": [
+      "STATUS-004"
+    ],
+    "remote ac": [
+      "STATUS-004"
+    ],
+    "air conditioning": [
+      "STATUS-004"
+    ],
+    "heating": [
+      "STATUS-004"
+    ],
+    "climate failed": [
+      "STATUS-004"
+    ],
+    "cannot start ac": [
+      "STATUS-004"
+    ],
+    "远控": [
+      "STATUS-004"
+    ],
+    "远程空调无法开启": [
+      "STATUS-004"
+    ],
+    "显示发送成功但车辆无动作": [
+      "STATUS-004"
+    ],
+    "privacy policy": [
+      "STATUS-005"
+    ],
+    "privacy notice": [
+      "STATUS-005"
+    ],
+    "not accepted": [
+      "STATUS-005"
+    ],
+    "declined": [
+      "STATUS-005"
+    ],
+    "accepted but app says not": [
+      "STATUS-005"
+    ],
+    "隐私协议": [
+      "STATUS-005"
+    ],
+    "提示未接受隐私协议": [
+      "STATUS-005"
+    ],
+    "privacy": [
+      "STATUS-005"
+    ],
+    "notice": [
+      "STATUS-005"
+    ],
+    "导致车控不可用": [
+      "STATUS-005"
+    ],
+    "temperature slider": [
+      "STATUS-006"
+    ],
+    "cannot change temperature": [
+      "STATUS-006"
+    ],
+    "seat heating missing": [
+      "STATUS-006"
+    ],
+    "no climate option": [
+      "STATUS-006"
+    ],
+    "function missing": [
+      "STATUS-006"
+    ],
+    "远程空调温度调节滑块": [
+      "STATUS-006"
+    ],
+    "座椅加热": [
+      "STATUS-006"
+    ],
+    "方向盘加热等功能缺失": [
+      "STATUS-006"
+    ],
+    "charge management blank": [
+      "STATUS-007"
+    ],
+    "no charging data": [
+      "STATUS-007"
+    ],
+    "charge level not displayed": [
+      "STATUS-007"
+    ],
+    "battery not shown": [
+      "STATUS-007"
+    ],
+    "充电管理无数据": [
+      "STATUS-007"
+    ],
+    "charge": [
+      "STATUS-007"
+    ],
+    "management": [
+      "STATUS-007"
+    ],
+    "充电管理页面无数据": [
+      "STATUS-007"
+    ],
+    "但首页有电量等数据": [
+      "STATUS-007"
+    ],
+    "error 59": [
+      "STATUS-008"
+    ],
+    "request failed 59": [
+      "STATUS-008"
+    ],
+    "error 47": [
+      "STATUS-008"
+    ],
+    "lock unlock failed": [
+      "STATUS-008"
+    ],
+    "error": [
+      "STATUS-008"
+    ],
+    "code": [
+      "STATUS-008"
+    ],
+    "具体数字": [
+      "STATUS-008"
+    ],
+    "车控命令失败但车态可读": [
+      "STATUS-008"
+    ],
+    "intrusion alert": [
+      "STATUS-009"
+    ],
+    "alarm notification": [
+      "STATUS-009"
+    ],
+    "abnormal alert": [
+      "STATUS-009"
+    ],
+    "tyre notification": [
+      "STATUS-009"
+    ],
+    "false alarm": [
+      "STATUS-009"
+    ],
+    "invasion": [
+      "STATUS-009"
+    ],
+    "报警": [
+      "STATUS-009"
+    ],
+    "异常报警": [
+      "STATUS-009"
+    ],
+    "入侵报警": [
+      "STATUS-009",
+      "NON-008"
+    ],
+    "胎压等通知频繁或疑似误报": [
+      "STATUS-009"
+    ],
+    "will not charge": [
+      "CHG-001"
+    ],
+    "charging stopped": [
+      "CHG-001"
+    ],
+    "v2l stops": [
+      "CHG-001"
+    ],
+    "charger port": [
+      "CHG-001"
+    ],
+    "latch": [
+      "CHG-001"
+    ],
+    "cannot release": [
+      "CHG-001"
+    ],
+    "ac charging current": [
+      "CHG-001"
+    ],
+    "车辆无法充电": [
+      "CHG-001"
+    ],
+    "充电中断": [
+      "CHG-001"
+    ],
+    "v2l": [
+      "CHG-001"
+    ],
+    "停止": [
+      "CHG-001"
+    ],
+    "充电口锁扣异常": [
+      "CHG-001"
+    ],
+    "range reduced": [
+      "CHG-002"
+    ],
+    "100% charge": [
+      "CHG-002"
+    ],
+    "lost miles": [
+      "CHG-002"
+    ],
+    "battery range": [
+      "CHG-002"
+    ],
+    "displayed range": [
+      "CHG-002"
+    ],
+    "battery health": [
+      "CHG-002"
+    ],
+    "满电显示续航下降": [
+      "CHG-002"
+    ],
+    "电池健康或续航计算疑问": [
+      "CHG-002"
+    ],
+    "scheduled charging": [
+      "CHG-003"
+    ],
+    "schedule ignored": [
+      "CHG-003"
+    ],
+    "00:00": [
+      "CHG-003"
+    ],
+    "22:00": [
+      "CHG-003"
+    ],
+    "time shifts": [
+      "CHG-003"
+    ],
+    "not charging": [
+      "CHG-003"
+    ],
+    "预约充电": [
+      "CHG-003",
+      "CHG-SCHED-001"
+    ],
+    "预约充电不执行": [
+      "CHG-003"
+    ],
+    "时间自动跳变": [
+      "CHG-003"
+    ],
+    "charging history": [
+      "CHG-004"
+    ],
+    "kwh": [
+      "CHG-004"
+    ],
+    "power bill": [
+      "CHG-004"
+    ],
+    "charging log": [
+      "CHG-004"
+    ],
+    "data usage": [
+      "CHG-004",
+      "NET-001"
+    ],
+    "sim status": [
+      "CHG-004"
+    ],
+    "subscription": [
+      "CHG-004",
+      "NET-001"
+    ],
+    "客户希望查看充电历史": [
+      "CHG-004"
+    ],
+    "电费报销": [
+      "CHG-004"
+    ],
+    "订阅": [
+      "CHG-004"
+    ],
+    "流量使用": [
+      "CHG-004"
+    ],
+    "digital key": [
+      "DK-001"
+    ],
+    "keyless start": [
+      "DK-001"
+    ],
+    "smart key not detected": [
+      "DK-001"
+    ],
+    "bluetooth key": [
+      "DK-001"
+    ],
+    "cannot start": [
+      "DK-001"
+    ],
+    "数字钥匙": [
+      "DK-001"
+    ],
+    "数字钥匙不可用": [
+      "DK-001"
+    ],
+    "找不到选项": [
+      "DK-001"
+    ],
+    "无法启动": [
+      "DK-001"
+    ],
+    "蓝牙连接失败": [
+      "DK-001"
+    ],
+    "user manual": [
+      "MAN-001"
+    ],
+    "owner manual": [
+      "MAN-001"
+    ],
+    "handbook": [
+      "MAN-001"
+    ],
+    "manual not available": [
+      "MAN-001"
+    ],
+    "cannot find manual": [
+      "MAN-001"
+    ],
+    "用户手册": [
+      "MAN-001",
+      "MAN-002"
+    ],
+    "中找不到用户手册": [
+      "MAN-001"
+    ],
+    "找不到指定车型": [
+      "MAN-001"
+    ],
+    "年份语言不对": [
+      "MAN-001"
+    ],
+    "pdf manual": [
+      "MAN-002"
+    ],
+    "download manual": [
+      "MAN-002"
+    ],
+    "send manual": [
+      "MAN-002"
+    ],
+    "manual in pdf": [
+      "MAN-002"
+    ],
+    "下载手册": [
+      "MAN-002"
+    ],
+    "要求下载": [
+      "MAN-002"
+    ],
+    "pdf": [
+      "MAN-002"
+    ],
+    "not activated": [
+      "ACT-001"
+    ],
+    "avn": [
+      "ACT-001"
+    ],
+    "ficm": [
+      "ACT-001"
+    ],
+    "aes encrypt": [
+      "ACT-001"
+    ],
+    "security audit": [
+      "ACT-001"
+    ],
+    "security certificate": [
+      "ACT-001"
+    ],
+    "avn id": [
+      "ACT-001"
+    ],
+    "car not activated": [
+      "ACT-001"
+    ],
+    "未激活": [
+      "ACT-001",
+      "TBOX-001"
+    ],
+    "车机激活失败": [
+      "ACT-001"
+    ],
+    "security": [
+      "ACT-001"
+    ],
+    "audit": [
+      "ACT-001"
+    ],
+    "aes": [
+      "ACT-001"
+    ],
+    "id": [
+      "ACT-001"
+    ],
+    "does": [
+      "ACT-001",
+      "ACT-002"
+    ],
+    "exist": [
+      "ACT-001"
+    ],
+    "does not have car information": [
+      "ACT-002"
+    ],
+    "10001": [
+      "ACT-002"
+    ],
+    "vehicle information missing": [
+      "ACT-002",
+      "TSP-001"
+    ],
+    "spotify": [
+      "ACT-002",
+      "FICM-MUSIC-001"
+    ],
+    "amazon music": [
+      "ACT-002",
+      "FICM-MUSIC-001"
+    ],
+    "online services unavailable": [
+      "ACT-002"
+    ],
+    "information": [
+      "ACT-002"
+    ],
+    "生态应用不可用": [
+      "ACT-002"
+    ],
+    "tbox replaced": [
+      "TBOX-001"
+    ],
+    "new tbox": [
+      "TBOX-001"
+    ],
+    "telematics box": [
+      "TBOX-001"
+    ],
+    "no qr": [
+      "TBOX-001"
+    ],
+    "cannot bind after replacement": [
+      "TBOX-001"
+    ],
+    "换件": [
+      "TBOX-001"
+    ],
+    "更换后无法绑车或远控": [
+      "TBOX-001"
+    ],
+    "carplay": [
+      "CPAA-001",
+      "NON-005"
+    ],
+    "android auto": [
+      "CPAA-001"
+    ],
+    "cpaa": [
+      "CPAA-001"
+    ],
+    "disconnect": [
+      "CPAA-001"
+    ],
+    "cable": [
+      "CPAA-001"
+    ],
+    "wireless": [
+      "CPAA-001"
+    ],
+    "usb": [
+      "CPAA-001"
+    ],
+    "phone not detected": [
+      "CPAA-001"
+    ],
+    "apple": [
+      "CPAA-001",
+      "NEW-WATCH-001"
+    ],
+    "android": [
+      "CPAA-001"
+    ],
+    "auto": [
+      "CPAA-001"
+    ],
+    "断连": [
+      "CPAA-001"
+    ],
+    "无法连接": [
+      "CPAA-001"
+    ],
+    "无线不支持": [
+      "CPAA-001"
+    ],
+    "bluetooth call": [
+      "BT-001"
+    ],
+    "hands free": [
+      "BT-001"
+    ],
+    "microphone": [
+      "BT-001"
+    ],
+    "cannot hear me": [
+      "BT-001"
+    ],
+    "distorted": [
+      "BT-001"
+    ],
+    "whistling": [
+      "BT-001"
+    ],
+    "barrel": [
+      "BT-001"
+    ],
+    "disconnects": [
+      "BT-001"
+    ],
+    "蓝牙电话对方听不到": [
+      "BT-001"
+    ],
+    "音质差": [
+      "BT-001"
+    ],
+    "通话几分钟后麦克风失效": [
+      "BT-001"
+    ],
+    "4g but network unavailable": [
+      "NET-001"
+    ],
+    "data services": [
+      "NET-001"
+    ],
+    "weather": [
+      "NET-001"
+    ],
+    "youtube": [
+      "NET-001"
+    ],
+    "tiktok": [
+      "NET-001"
+    ],
+    "hotspot": [
+      "NET-001"
+    ],
+    "esim": [
+      "NET-001"
+    ],
+    "车机网络有": [
+      "NET-001"
+    ],
+    "信号但天气": [
+      "NET-001"
+    ],
+    "在线服务不可用": [
+      "NET-001"
+    ],
+    "车载流量": [
+      "NET-001"
+    ],
+    "订阅查询": [
+      "NET-001"
+    ],
+    "navigation language": [
+      "MAP-001"
+    ],
+    "voice guidance": [
+      "MAP-001"
+    ],
+    "italian": [
+      "MAP-001"
+    ],
+    "dutch": [
+      "MAP-001"
+    ],
+    "turkish": [
+      "MAP-001"
+    ],
+    "map language": [
+      "MAP-001"
+    ],
+    "voice language": [
+      "MAP-001",
+      "FICM-VOICE-001"
+    ],
+    "导航语言": [
+      "MAP-001"
+    ],
+    "导航语音语言缺失": [
+      "MAP-001"
+    ],
+    "意大利语": [
+      "MAP-001"
+    ],
+    "荷兰语": [
+      "MAP-001"
+    ],
+    "土耳其语等": [
+      "MAP-001"
+    ],
+    "map update failed": [
+      "MAP-002"
+    ],
+    "media file not available": [
+      "MAP-002"
+    ],
+    "map resource": [
+      "MAP-002"
+    ],
+    "naviextras": [
+      "MAP-002"
+    ],
+    "usb update": [
+      "MAP-002"
+    ],
+    "content folder not exist": [
+      "MAP-002"
+    ],
+    "地图更新失败": [
+      "MAP-002"
+    ],
+    "地图资源缺失": [
+      "MAP-002"
+    ],
+    "导航媒体文件不可用": [
+      "MAP-002"
+    ],
+    "gps drift": [
+      "MAP-003"
+    ],
+    "location off road": [
+      "MAP-003"
+    ],
+    "live traffic": [
+      "MAP-003"
+    ],
+    "mapgrade": [
+      "MAP-003"
+    ],
+    "here": [
+      "MAP-003"
+    ],
+    "traffic data": [
+      "MAP-003"
+    ],
+    "wrong country": [
+      "MAP-003"
+    ],
+    "navigation stuck": [
+      "MAP-003"
+    ],
+    "gps": [
+      "MAP-003"
+    ],
+    "定位偏移": [
+      "MAP-003"
+    ],
+    "live": [
+      "MAP-003"
+    ],
+    "traffic": [
+      "MAP-003"
+    ],
+    "在线导航数据异常": [
+      "MAP-003"
+    ],
+    "region not supported": [
+      "REG-001"
+    ],
+    "imported": [
+      "REG-001"
+    ],
+    "another country": [
+      "REG-001"
+    ],
+    "cannot use ismart": [
+      "REG-001"
+    ],
+    "malaysia": [
+      "REG-001"
+    ],
+    "turkey": [
+      "REG-001"
+    ],
+    "colombia": [
+      "REG-001"
+    ],
+    "grey import": [
+      "REG-001"
+    ],
+    "地区不支持": [
+      "REG-001"
+    ],
+    "跨区车辆": [
+      "REG-001"
+    ],
+    "区域": [
+      "REG-001"
+    ],
+    "不匹配": [
+      "REG-001"
+    ],
+    "标准": [
+      "REG-001"
+    ],
+    "ismart": [
+      "REG-001",
+      "MODEL-001"
+    ],
+    "不可用": [
+      "REG-001"
+    ],
+    "model not supported": [
+      "MODEL-001"
+    ],
+    "no ismart": [
+      "MODEL-001"
+    ],
+    "remote control not supported": [
+      "MODEL-001"
+    ],
+    "no telematics": [
+      "MODEL-001"
+    ],
+    "unsupported configuration": [
+      "MODEL-001"
+    ],
+    "车型": [
+      "MODEL-001"
+    ],
+    "配置不支持": [
+      "MODEL-001"
+    ],
+    "或远控功能": [
+      "MODEL-001"
+    ],
+    "software update": [
+      "FICM-001"
+    ],
+    "latest version": [
+      "FICM-001"
+    ],
+    "infotainment version": [
+      "FICM-001"
+    ],
+    "firmware": [
+      "FICM-001"
+    ],
+    "r16": [
+      "FICM-001"
+    ],
+    "r27": [
+      "FICM-001"
+    ],
+    "update available": [
+      "FICM-001"
+    ],
+    "客户询问最新娱乐系统": [
+      "FICM-001"
+    ],
+    "软件版本": [
+      "FICM-001"
+    ],
+    "是否可更新": [
+      "FICM-001"
+    ],
+    "dab": [
+      "FICM-002"
+    ],
+    "rds": [
+      "FICM-002"
+    ],
+    "radio logo": [
+      "FICM-002"
+    ],
+    "station name": [
+      "FICM-002"
+    ],
+    "radio freezes": [
+      "FICM-002"
+    ],
+    "random characters": [
+      "FICM-002"
+    ],
+    "no reception": [
+      "FICM-002"
+    ],
+    "电台名称": [
+      "FICM-002"
+    ],
+    "logo": [
+      "FICM-002"
+    ],
+    "不显示": [
+      "FICM-002"
+    ],
+    "卡住": [
+      "FICM-002"
+    ],
+    "乱码": [
+      "FICM-002",
+      "CLOSE-002"
+    ],
+    "chinese language": [
+      "FICM-003"
+    ],
+    "screen blank": [
+      "FICM-003"
+    ],
+    "ui cut off": [
+      "FICM-003"
+    ],
+    "text truncated": [
+      "FICM-003"
+    ],
+    "wrong language": [
+      "FICM-003"
+    ],
+    "black screen": [
+      "FICM-003"
+    ],
+    "white screen": [
+      "FICM-003"
+    ],
+    "reboot": [
+      "FICM-003"
+    ],
+    "车机界面文案截断": [
+      "FICM-003"
+    ],
+    "语言错乱": [
+      "FICM-003"
+    ],
+    "中文界面": [
+      "FICM-003"
+    ],
+    "显示黑屏": [
+      "FICM-003"
+    ],
+    "白屏": [
+      "FICM-003"
+    ],
+    "重启": [
+      "FICM-003"
+    ],
+    "boot": [
+      "NON-001"
+    ],
+    "tailgate": [
+      "NON-001"
+    ],
+    "window": [
+      "NON-001"
+    ],
+    "wiper": [
+      "NON-001"
+    ],
+    "key fob": [
+      "NON-001"
+    ],
+    "door lock": [
+      "NON-001"
+    ],
+    "lights": [
+      "NON-001"
+    ],
+    "seat memory": [
+      "NON-001"
+    ],
+    "mirror": [
+      "NON-001"
+    ],
+    "body control": [
+      "NON-001"
+    ],
+    "尾门": [
+      "NON-001"
+    ],
+    "车窗": [
+      "NON-001"
+    ],
+    "雨刮": [
+      "NON-001"
+    ],
+    "钥匙": [
+      "NON-001"
+    ],
+    "门锁": [
+      "NON-001"
+    ],
+    "灯光": [
+      "NON-001"
+    ],
+    "座椅记忆等车身功能异常": [
+      "NON-001"
+    ],
+    "air conditioning stopped": [
+      "NON-002"
+    ],
+    "blowing hot air": [
+      "NON-002"
+    ],
+    "no air from vents": [
+      "NON-002"
+    ],
+    "heat pump": [
+      "NON-002"
+    ],
+    "ventilation": [
+      "NON-002"
+    ],
+    "ac not working": [
+      "NON-002"
+    ],
+    "车辆本身空调不制冷": [
+      "NON-002"
+    ],
+    "不出风": [
+      "NON-002"
+    ],
+    "吹热风": [
+      "NON-002"
+    ],
+    "热泵问题": [
+      "NON-002"
+    ],
+    "front collision": [
+      "NON-003",
+      "ADAS-AEB-001"
+    ],
+    "aeb": [
+      "NON-003",
+      "ADAS-AEB-001"
+    ],
+    "acc": [
+      "NON-003",
+      "ADAS-ACC-001"
+    ],
+    "lka": [
+      "NON-003",
+      "ADAS-LKA-001"
+    ],
+    "lane assist": [
+      "NON-003"
+    ],
+    "speed sign": [
+      "NON-003"
+    ],
+    "tsr": [
+      "NON-003"
+    ],
+    "speed warning": [
+      "NON-003"
+    ],
+    "cruise control": [
+      "NON-003",
+      "ADAS-ACC-001"
+    ],
+    "adas": [
+      "NON-003"
+    ],
+    "限速识别": [
+      "NON-003"
+    ],
+    "前碰撞误触发": [
+      "NON-003"
+    ],
+    "车道辅助异常": [
+      "NON-003"
+    ],
+    "warning light": [
+      "NON-004"
+    ],
+    "engine emission": [
+      "NON-004"
+    ],
+    "battery system fault": [
+      "NON-004"
+    ],
+    "airbag": [
+      "NON-004"
+    ],
+    "avm system failure": [
+      "NON-004"
+    ],
+    "dashboard": [
+      "NON-004",
+      "IPK-001"
+    ],
+    "ipk": [
+      "NON-004",
+      "IPK-001"
+    ],
+    "仪表报警": [
+      "NON-004"
+    ],
+    "发动机排放故障": [
+      "NON-004"
+    ],
+    "电池系统故障": [
+      "NON-004"
+    ],
+    "安全气囊": [
+      "NON-004"
+    ],
+    "avm": [
+      "NON-004"
+    ],
+    "故障": [
+      "NON-004"
+    ],
+    "how to": [
+      "NON-005"
+    ],
+    "where can i": [
+      "NON-005"
+    ],
+    "fuel consumption": [
+      "NON-005",
+      "APP-ENERGY-001"
+    ],
+    "wireless charging": [
+      "NON-005"
+    ],
+    "fader": [
+      "NON-005"
+    ],
+    "balance": [
+      "NON-005"
+    ],
+    "tire pressure": [
+      "NON-005"
+    ],
+    "service interval": [
+      "NON-005"
+    ],
+    "车辆功能如何使用": [
+      "NON-005"
+    ],
+    "油耗显示": [
+      "NON-005"
+    ],
+    "无线": [
+      "NON-005"
+    ],
+    "胎压": [
+      "NON-005"
+    ],
+    "音响": [
+      "NON-005"
+    ],
+    "点烟器位置": [
+      "NON-005"
+    ],
+    "保养里程等": [
+      "NON-005"
+    ],
+    "service history": [
+      "SVC-001",
+      "TSP-002"
+    ],
+    "warranty": [
+      "SVC-001"
+    ],
+    "maintenance": [
+      "SVC-001"
+    ],
+    "service record": [
+      "SVC-001"
+    ],
+    "inspection": [
+      "SVC-001",
+      "SVC-002"
+    ],
+    "repair status": [
+      "SVC-001"
+    ],
+    "recall": [
+      "SVC-001"
+    ],
+    "7-year warranty": [
+      "SVC-001"
+    ],
+    "保养记录": [
+      "SVC-001"
+    ],
+    "保修状态": [
+      "SVC-001"
+    ],
+    "维修进度": [
+      "SVC-001"
+    ],
+    "服务计划": [
+      "SVC-001"
+    ],
+    "维修费用": [
+      "SVC-001"
+    ],
+    "事故维修": [
+      "SVC-001"
+    ],
+    "service location near me": [
+      "SVC-002"
+    ],
+    "service near me": [
+      "SVC-002"
+    ],
+    "inspection near me": [
+      "SVC-002"
+    ],
+    "where can i do service": [
+      "SVC-002"
+    ],
+    "mg service": [
+      "SVC-002"
+    ],
+    "查找附近服务点": [
+      "SVC-002"
+    ],
+    "授权服务位置": [
+      "SVC-002"
+    ],
+    "near": [
+      "SVC-002"
+    ],
+    "me": [
+      "SVC-002"
+    ],
+    "suggestion": [
+      "REQ-001"
+    ],
+    "feedback": [
+      "REQ-001"
+    ],
+    "improve": [
+      "REQ-001"
+    ],
+    "shortcuts": [
+      "REQ-001"
+    ],
+    "automation": [
+      "REQ-001"
+    ],
+    "customize": [
+      "REQ-001"
+    ],
+    "dashcam": [
+      "REQ-001"
+    ],
+    "notification sound": [
+      "REQ-001"
+    ],
+    "home screen": [
+      "REQ-001"
+    ],
+    "布局": [
+      "REQ-001"
+    ],
+    "快捷指令": [
+      "REQ-001"
+    ],
+    "通知声音": [
+      "REQ-001"
+    ],
+    "用户配置": [
+      "REQ-001"
+    ],
+    "常用功能置顶等建议": [
+      "REQ-001"
+    ],
+    "notify if charging stops": [
+      "REQ-002"
+    ],
+    "charging reminder": [
+      "REQ-002"
+    ],
+    "charging notification": [
+      "REQ-002"
+    ],
+    "stopped before 100": [
+      "REQ-002"
+    ],
+    "alert me": [
+      "REQ-002"
+    ],
+    "客户希望充电停止": [
+      "REQ-002"
+    ],
+    "未达目标时": [
+      "REQ-002"
+    ],
+    "主动通知": [
+      "REQ-002"
+    ],
+    "remote window": [
+      "REQ-003"
+    ],
+    "close windows remotely": [
+      "REQ-003"
+    ],
+    "open windows": [
+      "REQ-003"
+    ],
+    "window control app": [
+      "REQ-003"
+    ],
+    "客户希望远程升降车窗": [
+      "REQ-003"
+    ],
+    "忘关窗可用": [
+      "REQ-003"
+    ],
+    "关闭": [
+      "REQ-003"
+    ],
+    "driving log": [
+      "REQ-004"
+    ],
+    "trip log": [
+      "REQ-004"
+    ],
+    "mileage log": [
+      "REQ-004"
+    ],
+    "total mileage": [
+      "REQ-004"
+    ],
+    "fuel cost": [
+      "REQ-004"
+    ],
+    "company car": [
+      "REQ-004"
+    ],
+    "consumption statistics": [
+      "REQ-004"
+    ],
+    "行车日志": [
+      "REQ-004"
+    ],
+    "旅程记录": [
+      "REQ-004"
+    ],
+    "总里程": [
+      "REQ-004"
+    ],
+    "油耗统计": [
+      "REQ-004"
+    ],
+    "公司车管理": [
+      "REQ-004"
+    ],
+    "resolved": [
+      "CLOSE-001"
+    ],
+    "working now": [
+      "CLOSE-001"
+    ],
+    "all good": [
+      "CLOSE-001"
+    ],
+    "thank you": [
+      "CLOSE-001"
+    ],
+    "problem solved": [
+      "CLOSE-001"
+    ],
+    "已解决": [
+      "CLOSE-001"
+    ],
+    "客户回复问题已解决": [
+      "CLOSE-001"
+    ],
+    "正常工作": [
+      "CLOSE-001"
+    ],
+    "hi": [
+      "CLOSE-002"
+    ],
+    "hello": [
+      "CLOSE-002",
+      "FICM-VOICE-001"
+    ],
+    "unclear": [
+      "CLOSE-002"
+    ],
+    "random text": [
+      "CLOSE-002"
+    ],
+    "cannot understand": [
+      "CLOSE-002"
+    ],
+    "no issue": [
+      "CLOSE-002"
+    ],
+    "无有效内容": [
+      "CLOSE-002"
+    ],
+    "无法理解": [
+      "CLOSE-002"
+    ],
+    "仅问候": [
+      "CLOSE-002"
+    ],
+    "相同发件人且相同正文": [
+      "CLOSE-002"
+    ],
+    "app map": [
+      "APP-MAP-001"
+    ],
+    "find my car": [
+      "APP-MAP-001"
+    ],
+    "send destination": [
+      "APP-MAP-001"
+    ],
+    "poi": [
+      "APP-MAP-001"
+    ],
+    "charging station": [
+      "APP-MAP-001"
+    ],
+    "vehicle location": [
+      "APP-MAP-001"
+    ],
+    "map in app": [
+      "APP-MAP-001"
+    ],
+    "destination": [
+      "APP-MAP-001"
+    ],
+    "地图": [
+      "APP-MAP-001"
+    ],
+    "车辆位置": [
+      "APP-MAP-001"
+    ],
+    "发送目的地": [
+      "APP-MAP-001"
+    ],
+    "找充电站": [
+      "APP-MAP-001"
+    ],
+    "兴趣点等": [
+      "APP-MAP-001"
+    ],
+    "地图功能异常": [
+      "APP-MAP-001"
+    ],
+    "energy statistics": [
+      "APP-ENERGY-001"
+    ],
+    "consumption": [
+      "APP-ENERGY-001"
+    ],
+    "electric consumption": [
+      "APP-ENERGY-001"
+    ],
+    "statistics": [
+      "APP-ENERGY-001"
+    ],
+    "trip data": [
+      "APP-ENERGY-001"
+    ],
+    "能耗统计": [
+      "APP-ENERGY-001"
+    ],
+    "能耗": [
+      "APP-ENERGY-001"
+    ],
+    "统计": [
+      "APP-ENERGY-001"
+    ],
+    "油耗": [
+      "APP-ENERGY-001"
+    ],
+    "电耗": [
+      "APP-ENERGY-001"
+    ],
+    "行程统计不显示或不准确": [
+      "APP-ENERGY-001"
+    ],
+    "charging mode not saved": [
+      "APP-CHGMODE-001"
+    ],
+    "target level resets": [
+      "APP-CHGMODE-001"
+    ],
+    "80%": [
+      "APP-CHGMODE-001"
+    ],
+    "100%": [
+      "APP-CHGMODE-001"
+    ],
+    "save setting": [
+      "APP-CHGMODE-001"
+    ],
+    "cannot remember charging mode": [
+      "APP-CHGMODE-001"
+    ],
+    "充电目标": [
+      "APP-CHGMODE-001"
+    ],
+    "模式保存后恢复默认": [
+      "APP-CHGMODE-001"
+    ],
+    "100": [
+      "APP-CHGMODE-001"
+    ],
+    "回到": [
+      "APP-CHGMODE-001"
+    ],
+    "80": [
+      "APP-CHGMODE-001"
+    ],
+    "vehicle color wrong": [
+      "APP-BODYIMG-001"
+    ],
+    "car image wrong": [
+      "APP-BODYIMG-001"
+    ],
+    "white image": [
+      "APP-BODYIMG-001"
+    ],
+    "wrong vin shown": [
+      "APP-BODYIMG-001"
+    ],
+    "vehicle picture": [
+      "APP-BODYIMG-001"
+    ],
+    "body image": [
+      "APP-BODYIMG-001"
+    ],
+    "车辆图片": [
+      "APP-BODYIMG-001"
+    ],
+    "颜色": [
+      "APP-BODYIMG-001"
+    ],
+    "车型图显示不符": [
+      "APP-BODYIMG-001"
+    ],
+    "how to bind": [
+      "APP-GUIDE-001"
+    ],
+    "binding tutorial": [
+      "APP-GUIDE-001"
+    ],
+    "guide": [
+      "APP-GUIDE-001"
+    ],
+    "instructions": [
+      "APP-GUIDE-001"
+    ],
+    "客户需要绑车教程": [
+      "APP-GUIDE-001"
+    ],
+    "secondary account，main account；secondary account，主关键词 secondary account second account 2nd account additional account another account family account sub account sub-account 场景关键词 add my partner add my wife add my husband add family member add another user add second user invite user share vehicle share car vehicle sharing grant access authorize user / authorise user two phones same car on two phones use the app on another phone": [
+      "APP-GUIDE-002"
+    ],
+    "二级账号": [
+      "APP-GUIDE-002"
+    ],
+    "副账号设置教程": [
+      "APP-GUIDE-002"
+    ],
+    "app update": [
+      "APP-SW-001"
+    ],
+    "latest app": [
+      "APP-SW-001"
+    ],
+    "app crashes": [
+      "APP-SW-001"
+    ],
+    "app cannot open": [
+      "APP-SW-001"
+    ],
+    "clear cache": [
+      "APP-SW-001"
+    ],
+    "reinstall": [
+      "APP-SW-001"
+    ],
+    "app version": [
+      "APP-SW-001"
+    ],
+    "版本更新": [
+      "APP-SW-001"
+    ],
+    "安装": [
+      "APP-SW-001"
+    ],
+    "打不开": [
+      "APP-SW-001"
+    ],
+    "崩溃": [
+      "APP-SW-001"
+    ],
+    "缓存问题": [
+      "APP-SW-001"
+    ],
+    "no vehicle data": [
+      "TSP-001"
+    ],
+    "car information": [
+      "TSP-001"
+    ],
+    "data missing": [
+      "TSP-001"
+    ],
+    "tsp": [
+      "TSP-001"
+    ],
+    "no vehicle found": [
+      "TSP-001"
+    ],
+    "后台": [
+      "TSP-001"
+    ],
+    "云端车辆信息缺失": [
+      "TSP-001"
+    ],
+    "或车机提示无车辆信息": [
+      "TSP-001"
+    ],
+    "send data": [
+      "TSP-002"
+    ],
+    "alarm messages": [
+      "TSP-002"
+    ],
+    "gps history": [
+      "TSP-002"
+    ],
+    "personal data": [
+      "TSP-002"
+    ],
+    "gdpr": [
+      "TSP-002"
+    ],
+    "data request": [
+      "TSP-002"
+    ],
+    "客户要求历史定位": [
+      "TSP-002"
+    ],
+    "报警记录": [
+      "TSP-002"
+    ],
+    "服务记录": [
+      "TSP-002"
+    ],
+    "个人": [
+      "TSP-002"
+    ],
+    "车辆数据导出": [
+      "TSP-002"
+    ],
+    "music": [
+      "FICM-MUSIC-001"
+    ],
+    "live streaming": [
+      "FICM-MUSIC-001"
+    ],
+    "online music": [
+      "FICM-MUSIC-001"
+    ],
+    "built-in music": [
+      "FICM-MUSIC-001"
+    ],
+    "amazon": [
+      "FICM-MUSIC-001"
+    ],
+    "在线音乐不可用": [
+      "FICM-MUSIC-001"
+    ],
+    "应用缺失": [
+      "FICM-MUSIC-001"
+    ],
+    "hello mg": [
+      "FICM-VOICE-001"
+    ],
+    "voice command": [
+      "FICM-VOICE-001"
+    ],
+    "voice assistant": [
+      "FICM-VOICE-001"
+    ],
+    "italian voice": [
+      "FICM-VOICE-001"
+    ],
+    "dutch voice": [
+      "FICM-VOICE-001"
+    ],
+    "mg": [
+      "FICM-VOICE-001",
+      "FICM-REMEMBER-001"
+    ],
+    "语音助手不可用": [
+      "FICM-VOICE-001"
+    ],
+    "语音语言不支持": [
+      "FICM-VOICE-001"
+    ],
+    "navigation sound": [
+      "FICM-VOLUME-001"
+    ],
+    "radio sound holes": [
+      "FICM-VOLUME-001"
+    ],
+    "volume": [
+      "FICM-VOLUME-001"
+    ],
+    "mute": [
+      "FICM-VOLUME-001"
+    ],
+    "voice alerts": [
+      "FICM-VOLUME-001"
+    ],
+    "sound signal": [
+      "FICM-VOLUME-001"
+    ],
+    "导航声音": [
+      "FICM-VOLUME-001"
+    ],
+    "收音机被导航打断": [
+      "FICM-VOLUME-001"
+    ],
+    "音量": [
+      "FICM-VOLUME-001"
+    ],
+    "静音设置问题": [
+      "FICM-VOLUME-001"
+    ],
+    "driving mode not saved": [
+      "FICM-REMEMBER-001"
+    ],
+    "mg pilot": [
+      "FICM-REMEMBER-001"
+    ],
+    "custom mode": [
+      "FICM-REMEMBER-001"
+    ],
+    "overspeed warning": [
+      "FICM-REMEMBER-001"
+    ],
+    "resets after restart": [
+      "FICM-REMEMBER-001"
+    ],
+    "default mode": [
+      "FICM-REMEMBER-001"
+    ],
+    "驾驶模式": [
+      "FICM-REMEMBER-001"
+    ],
+    "pilot": [
+      "FICM-REMEMBER-001"
+    ],
+    "自定义设置": [
+      "FICM-REMEMBER-001"
+    ],
+    "限速报警每次重启恢复默认": [
+      "FICM-REMEMBER-001"
+    ],
+    "privacy accepted declined": [
+      "FICM-PRIV-002"
+    ],
+    "repeated privacy notification": [
+      "FICM-PRIV-002"
+    ],
+    "agreement status changes": [
+      "FICM-PRIV-002"
+    ],
+    "privacy messages": [
+      "FICM-PRIV-002"
+    ],
+    "隐私状态频繁接受": [
+      "FICM-PRIV-002"
+    ],
+    "拒绝跳变": [
+      "FICM-PRIV-002"
+    ],
+    "多次推送隐私通知": [
+      "FICM-PRIV-002"
+    ],
+    "infotainment restarts": [
+      "FICM-REBOOT-001"
+    ],
+    "keeps rebooting": [
+      "FICM-REBOOT-001"
+    ],
+    "crashes": [
+      "FICM-REBOOT-001"
+    ],
+    "freezes then restarts": [
+      "FICM-REBOOT-001"
+    ],
+    "automatic restart": [
+      "FICM-REBOOT-001"
+    ],
+    "车机自动重启": [
+      "FICM-REBOOT-001"
+    ],
+    "卡死": [
+      "FICM-REBOOT-001"
+    ],
+    "循环重启": [
+      "FICM-REBOOT-001"
+    ],
+    "translation": [
+      "ISMT-TRAN-001"
+    ],
+    "wrong text": [
+      "ISMT-TRAN-001"
+    ],
+    "language error": [
+      "ISMT-TRAN-001"
+    ],
+    "should say email": [
+      "ISMT-TRAN-001"
+    ],
+    "wording": [
+      "ISMT-TRAN-001"
+    ],
+    "truncated text": [
+      "ISMT-TRAN-001"
+    ],
+    "翻译": [
+      "ISMT-TRAN-001"
+    ],
+    "车机翻译错误": [
+      "ISMT-TRAN-001"
+    ],
+    "文案不准确": [
+      "ISMT-TRAN-001"
+    ],
+    "按钮显示手机号码但应为邮箱等": [
+      "ISMT-TRAN-001"
+    ],
+    "ota": [
+      "FOTA-001"
+    ],
+    "over the air": [
+      "FOTA-001"
+    ],
+    "fota": [
+      "FOTA-001"
+    ],
+    "online update": [
+      "FOTA-001"
+    ],
+    "update remotely": [
+      "FOTA-001"
+    ],
+    "map ota": [
+      "FOTA-001"
+    ],
+    "客户希望": [
+      "FOTA-001"
+    ],
+    "更新": [
+      "FOTA-001"
+    ],
+    "询问是否支持": [
+      "FOTA-001"
+    ],
+    "地图是否": [
+      "FOTA-001"
+    ],
+    "adjust charging power": [
+      "NEW-CHGPOWER-001"
+    ],
+    "charging current": [
+      "NEW-CHGPOWER-001"
+    ],
+    "max current": [
+      "NEW-CHGPOWER-001"
+    ],
+    "15a": [
+      "NEW-CHGPOWER-001"
+    ],
+    "3a": [
+      "NEW-CHGPOWER-001"
+    ],
+    "charge power setting": [
+      "NEW-CHGPOWER-001"
+    ],
+    "客户希望在": [
+      "NEW-CHGPOWER-001"
+    ],
+    "车机调节充电功率": [
+      "NEW-CHGPOWER-001"
+    ],
+    "电流": [
+      "NEW-CHGPOWER-001"
+    ],
+    "watch app": [
+      "NEW-WATCH-001"
+    ],
+    "apple watch": [
+      "NEW-WATCH-001"
+    ],
+    "smartwatch": [
+      "NEW-WATCH-001"
+    ],
+    "watch version": [
+      "NEW-WATCH-001"
+    ],
+    "客户希望手表": [
+      "NEW-WATCH-001"
+    ],
+    "watch": [
+      "NEW-WATCH-001"
+    ],
+    "操作车辆": [
+      "NEW-WATCH-001"
+    ],
+    "charging speed": [
+      "NON-006"
+    ],
+    "charging power": [
+      "NON-006"
+    ],
+    "kw": [
+      "NON-006"
+    ],
+    "supercharger": [
+      "NON-006"
+    ],
+    "fast charger": [
+      "NON-006"
+    ],
+    "only 50kw": [
+      "NON-006"
+    ],
+    "slow charging": [
+      "NON-006"
+    ],
+    "充电速度低": [
+      "NON-006"
+    ],
+    "快充功率达不到宣传": [
+      "NON-006"
+    ],
+    "桩额定功率": [
+      "NON-006"
+    ],
+    "lost key": [
+      "NON-007"
+    ],
+    "key locked in car": [
+      "NON-007"
+    ],
+    "smart key not recognized": [
+      "NON-007"
+    ],
+    "cannot open car": [
+      "NON-007"
+    ],
+    "cannot start car": [
+      "NON-007"
+    ],
+    "钥匙丢失": [
+      "NON-007"
+    ],
+    "钥匙锁车内": [
+      "NON-007"
+    ],
+    "无法开门": [
+      "NON-007"
+    ],
+    "启动车辆": [
+      "NON-007"
+    ],
+    "remote climate alarm": [
+      "NON-008"
+    ],
+    "intrusion alarm when ac starts": [
+      "NON-008"
+    ],
+    "alarm goes off": [
+      "NON-008"
+    ],
+    "illega invasion": [
+      "NON-008"
+    ],
+    "远程空调触发车内报警": [
+      "NON-008"
+    ],
+    "adaptive cruise": [
+      "ADAS-ACC-001"
+    ],
+    "bike rack": [
+      "ADAS-ACC-001"
+    ],
+    "towbar": [
+      "ADAS-ACC-001"
+    ],
+    "cruise not working": [
+      "ADAS-ACC-001"
+    ],
+    "自适应巡航": [
+      "ADAS-ACC-001"
+    ],
+    "巡航控制": [
+      "ADAS-ACC-001"
+    ],
+    "拖车": [
+      "ADAS-ACC-001"
+    ],
+    "自行车架导致巡航不可用": [
+      "ADAS-ACC-001"
+    ],
+    "emergency braking": [
+      "ADAS-AEB-001"
+    ],
+    "brakes hard": [
+      "ADAS-AEB-001"
+    ],
+    "false braking": [
+      "ADAS-AEB-001"
+    ],
+    "collision assistance": [
+      "ADAS-AEB-001"
+    ],
+    "前碰撞": [
+      "ADAS-AEB-001"
+    ],
+    "自动刹车误触发或不触发": [
+      "ADAS-AEB-001"
+    ],
+    "lane keeping": [
+      "ADAS-LKA-001"
+    ],
+    "steering left": [
+      "ADAS-LKA-001"
+    ],
+    "drifts left": [
+      "ADAS-LKA-001"
+    ],
+    "harsh turns": [
+      "ADAS-LKA-001"
+    ],
+    "lane departure": [
+      "ADAS-LKA-001"
+    ],
+    "车道保持": [
+      "ADAS-LKA-001"
+    ],
+    "方向盘自动偏转": [
+      "ADAS-LKA-001"
+    ],
+    "车辆向左偏": [
+      "ADAS-LKA-001"
+    ],
+    "tja": [
+      "ADAS-TJA-001"
+    ],
+    "traffic jam assist": [
+      "ADAS-TJA-001"
+    ],
+    "lane centering": [
+      "ADAS-TJA-001"
+    ],
+    "low speed assist": [
+      "ADAS-TJA-001"
+    ],
+    "交通拥堵辅助": [
+      "ADAS-TJA-001"
+    ],
+    "车道居中": [
+      "ADAS-TJA-001"
+    ],
+    "低速辅助异常": [
+      "ADAS-TJA-001"
+    ],
+    "instrument cluster": [
+      "IPK-001"
+    ],
+    "display chinese": [
+      "IPK-001"
+    ],
+    "clock": [
+      "IPK-001"
+    ],
+    "mileage reset": [
+      "IPK-001"
+    ],
+    "warning sign": [
+      "IPK-001"
+    ],
+    "仪表语言": [
+      "IPK-001"
+    ],
+    "温度": [
+      "IPK-001"
+    ],
+    "里程显示": [
+      "IPK-001"
+    ],
+    "故障提示等": [
+      "IPK-001"
+    ],
+    "问题": [
+      "IPK-001"
+    ],
+    "paint peeling": [
+      "SVC-003"
+    ],
+    "alloy wheel": [
+      "SVC-003"
+    ],
+    "cracked glass": [
+      "SVC-003"
+    ],
+    "moisture in lights": [
+      "SVC-003"
+    ],
+    "steering wheel peeling": [
+      "SVC-003"
+    ],
+    "warranty claim": [
+      "SVC-003"
+    ],
+    "车漆": [
+      "SVC-003"
+    ],
+    "轮毂": [
+      "SVC-003"
+    ],
+    "玻璃": [
+      "SVC-003"
+    ],
+    "灯罩进水": [
+      "SVC-003"
+    ],
+    "内饰磨损等": [
+      "SVC-003"
+    ],
+    "not in database": [
+      "UNSUP-001"
+    ],
+    "vehicle not found": [
+      "UNSUP-001"
+    ],
+    "maxus": [
+      "UNSUP-001"
+    ],
+    "not mg ismart": [
+      "UNSUP-001"
+    ],
+    "unsupported vehicle": [
+      "UNSUP-001"
+    ],
+    "车辆不是我方负责制造": [
+      "UNSUP-001"
+    ],
+    "后台搜不到": [
+      "UNSUP-001"
+    ],
+    "或其他品牌": [
+      "UNSUP-001"
+    ],
+    "不兼容": [
+      "UNSUP-001"
+    ],
+    "two accounts": [
+      "NEW-MULTI-001"
+    ],
+    "multiple accounts": [
+      "NEW-MULTI-001"
+    ],
+    "both users": [
+      "NEW-MULTI-001"
+    ],
+    "partner account": [
+      "NEW-MULTI-001"
+    ],
+    "share car": [
+      "NEW-MULTI-001"
+    ],
+    "family account": [
+      "NEW-MULTI-001"
+    ],
+    "客户希望多个主账号绑定同一辆车": [
+      "NEW-MULTI-001"
+    ],
+    "不想用副账号": [
+      "NEW-MULTI-001"
+    ],
+    "theme": [
+      "NEW-THEME-001"
+    ],
+    "dark mode": [
+      "NEW-THEME-001"
+    ],
+    "light mode": [
+      "NEW-THEME-001"
+    ],
+    "display theme": [
+      "NEW-THEME-001"
+    ],
+    "customize app": [
+      "NEW-THEME-001"
+    ],
+    "主题": [
+      "NEW-THEME-001"
+    ],
+    "深浅色": [
+      "NEW-THEME-001"
+    ],
+    "界面自定义诉求": [
+      "NEW-THEME-001"
+    ],
+    "multiple charging schedules": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "time slots": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "off peak": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "tariff": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "split schedule": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "希望多个时间段预约充电": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "复杂电价策略": [
+      "NEW-SPLIT-CHG-001"
+    ],
+    "book service in app": [
+      "NEW-SERVICE-001"
+    ],
+    "service appointment": [
+      "NEW-SERVICE-001"
+    ],
+    "maintenance booking": [
+      "NEW-SERVICE-001"
+    ],
+    "schedule inspection": [
+      "NEW-SERVICE-001"
+    ],
+    "希望": [
+      "NEW-SERVICE-001",
+      "NEW-LIGHT-001"
+    ],
+    "预约保养": [
+      "NEW-SERVICE-001"
+    ],
+    "查看服务计划": [
+      "NEW-SERVICE-001"
+    ],
+    "schedule seat heating": [
+      "NEW-SEAT-001"
+    ],
+    "remote seat heating": [
+      "NEW-SEAT-001"
+    ],
+    "seat heater timer": [
+      "NEW-SEAT-001"
+    ],
+    "希望预约座椅加热": [
+      "NEW-SEAT-001"
+    ],
+    "远程座椅加热": [
+      "NEW-SEAT-001"
+    ],
+    "remote lights": [
+      "NEW-LIGHT-001"
+    ],
+    "turn off lights": [
+      "NEW-LIGHT-001"
+    ],
+    "remote lamp": [
+      "NEW-LIGHT-001"
+    ],
+    "lights left on": [
+      "NEW-LIGHT-001"
+    ],
+    "远程关闭车灯": [
+      "NEW-LIGHT-001"
+    ],
+    "灯光控制": [
+      "NEW-LIGHT-001"
+    ],
+    "ev trip planner": [
+      "NEW-EVTRIP-001"
+    ],
+    "route planner": [
+      "NEW-EVTRIP-001"
+    ],
+    "send route": [
+      "NEW-EVTRIP-001"
+    ],
+    "travel plan": [
+      "NEW-EVTRIP-001"
+    ],
+    "destination to car": [
+      "NEW-EVTRIP-001"
+    ],
+    "ev": [
+      "NEW-EVTRIP-001"
+    ],
+    "trip": [
+      "NEW-EVTRIP-001"
+    ],
+    "planner": [
+      "NEW-EVTRIP-001"
+    ],
+    "路线规划": [
+      "NEW-EVTRIP-001"
+    ],
+    "从手机发送路线到车机": [
+      "NEW-EVTRIP-001"
+    ],
+    "schedule charging": [
+      "CHG-SCHED-001"
+    ],
+    "off-peak charging": [
+      "CHG-SCHED-001"
+    ],
+    "charging schedule": [
+      "CHG-SCHED-001"
+    ],
+    "set charging time": [
+      "CHG-SCHED-001"
+    ],
+    "off peak hours": [
+      "CHG-SCHED-001"
+    ],
+    "charging timer": [
+      "CHG-SCHED-001"
+    ],
+    "充电时段": [
+      "CHG-SCHED-001"
+    ],
+    "定时充电": [
+      "CHG-SCHED-001"
+    ],
+    "分时段充电": [
+      "CHG-SCHED-001"
+    ],
+    "客户问如何在": [
+      "CHG-SCHED-001"
+    ],
+    "设置充电时段": [
+      "CHG-SCHED-001"
+    ],
+    "off": [
+      "CHG-SCHED-001"
+    ],
+    "peak": [
+      "CHG-SCHED-001"
+    ]
+  },
+  "l2_to_sub_intent": {
+    "App-车控车态相关": "app_vehicle_control_status",
+    "App-绑车解绑相关": "app_binding_flow",
+    "App-账号管理相关": "app_account_management",
+    "iSMART-功能咨询": "ismart_feature_inquiry",
+    "FICM-地图相关": "ficm_map",
+    "FICM-隐私协议相关": "ismart_privacy",
+    "iSMART-用户手册相关": "ismart_user_manual",
+    "FICM-激活相关": "ficm_activation",
+    "App-引导手册": "app_guide_manual",
+    "App-消息中心相关": "app_messages",
+    "FICM-网络相关": "ficm_network",
+    "FICM-CPAA相关": "ficm_cpaa",
+    "FICM-蓝牙相关": "ficm_bluetooth",
+    "FICM-Online Service相关": "ficm_online_service",
+    "iSMART-支持车区域": "ismart_region_support",
+    "FICM-软件更新": "ficm_software_update",
+    "FICM-Radio相关": "ficm_radio",
+    "FICM-界面层级复杂": "ficm_ui_complexity",
+    "App-地图相关": "app_map",
+    "App-能耗统计相关": "app_energy_stats",
+    "App-无法记忆充电模式": "app_charging_mode_not_saved",
+    "App-车体图相关": "app_vehicle_image",
+    "App-软件更新": "app_update",
+    "TSP-车辆信息缺失": "tsp_data_missing",
+    "TSP-敏感数据要求": "tsp_sensitive_data",
+    "FICM-Music相关": "ficm_music",
+    "FICM-Voice Service相关": "ficm_voice",
+    "FICM-Volume相关": "ficm_volume",
+    "FICM-无法记忆驾驶模式": "ficm_driving_mode_not_saved",
+    "FICM-自动重启": "ficm_auto_reboot",
+    "iSMART-翻译相关": "ismart_translation",
+    "App-预约充电相关": "app_charging_schedule",
+    "关闭-已解决": "close_resolved",
+    "关闭-无效邮件": "close_invalid",
+    "新需求-App-充电历史记录": "feat_request_charging_history",
+    "新需求-App-Feedback": "feat_request_app_feedback",
+    "新需求-App-充电提醒": "feat_request_charging_notification",
+    "新需求-App-远控车窗": "feat_request_remote_window",
+    "新需求-App-总里程": "feat_request_total_mileage",
+    "新需求-OTA升级": "feat_request_ota",
+    "新需求-FICM/App-可调充电功率": "feat_request_adjustable_charging_power",
+    "新需求-Watch版App": "feat_request_watch_app",
+    "新需求-App-多账号绑车": "feat_request_multi_account_binding",
+    "新需求-App-多主题切换": "feat_request_theme_switching",
+    "新需求-App-分时段预约充电": "feat_request_split_charging_schedule",
+    "新需求-App-预约维保": "feat_request_service_booking",
+    "新需求-App-预约座椅加热": "feat_request_seat_heating_schedule",
+    "新需求-App-远控关灯": "feat_request_remote_lights",
+    "新需求-FICM- EV Trip Planner": "feat_request_ev_trip_planner",
+    "请求完整车辆信息": "general_request_complete_vehicle_info",
+    "请求VIN/提示VIN位置": "general_request_vin",
+    "VIN不正确": "general_vin_incorrect",
+    "请求视频/截图": "general_request_screenshot_video",
+    "后台分析中": "general_backend_analyzing",
+    "非iSMART-充电相关": "non_ismart_charging",
+    "非iSMART-售前售后服务": "non_ismart_after_sales_service",
+    "非iSMART-不支持车型": "non_ismart_unsupported_model",
+    "非iSMART-车身控制相关": "non_ismart_body_control",
+    "非iSMART-空调相关": "non_ismart_ac",
+    "ADAS相关": "adas_general",
+    "IPK相关": "ipk_general",
+    "非iSMART-功能咨询": "non_ismart_feature_inquiry",
+    "Adas-ACC": "adas_acc",
+    "Adas-AEB": "adas_aeb",
+    "Adas-LKA": "adas_lka",
+    "Adas-TJA": "adas_tja",
+    "非iSMART-IPK相关": "non_ismart_ipk"
+  },
+  "l2_to_intent": {
+    "App-车控车态相关": "app_vehicle_control",
+    "App-绑车解绑相关": "app_binding",
+    "App-账号管理相关": "app_account",
+    "iSMART-功能咨询": "ismart_feature_inquiry",
+    "FICM-地图相关": "ficm_map",
+    "FICM-隐私协议相关": "ismart_privacy",
+    "iSMART-用户手册相关": "ismart_user_manual",
+    "FICM-激活相关": "ficm_activation",
+    "App-引导手册": "ismart_user_manual",
+    "App-消息中心相关": "app_messages",
+    "FICM-网络相关": "ismart_connectivity",
+    "FICM-CPAA相关": "ficm_cpaa",
+    "FICM-蓝牙相关": "ficm_bluetooth",
+    "FICM-Online Service相关": "ismart_connectivity",
+    "iSMART-支持车区域": "ismart_region_support",
+    "FICM-软件更新": "app_update",
+    "FICM-Radio相关": "ficm_radio",
+    "FICM-界面层级复杂": "ismart_feature_inquiry",
+    "App-地图相关": "app_vehicle_control",
+    "App-能耗统计相关": "app_vehicle_control",
+    "App-无法记忆充电模式": "app_vehicle_control",
+    "App-车体图相关": "app_vehicle_control",
+    "App-软件更新": "app_update",
+    "TSP-车辆信息缺失": "tsp_data_missing",
+    "TSP-敏感数据要求": "tsp_sensitive_data",
+    "FICM-Music相关": "ismart_music_streaming",
+    "FICM-Voice Service相关": "ficm_voice",
+    "FICM-Volume相关": "ficm_radio",
+    "FICM-无法记忆驾驶模式": "hardware_warranty",
+    "FICM-自动重启": "hardware_warranty",
+    "iSMART-翻译相关": "ismart_translation",
+    "App-预约充电相关": "app_vehicle_control",
+    "关闭-已解决": "follow_up_resolved",
+    "关闭-无效邮件": "other",
+    "新需求-App-充电历史记录": "ismart_feature_inquiry",
+    "新需求-App-Feedback": "app_suggestion",
+    "新需求-App-充电提醒": "ismart_feature_inquiry",
+    "新需求-App-远控车窗": "ismart_feature_inquiry",
+    "新需求-App-总里程": "ismart_feature_inquiry",
+    "新需求-OTA升级": "ismart_fota",
+    "新需求-FICM/App-可调充电功率": "ismart_feature_inquiry",
+    "新需求-Watch版App": "ismart_feature_inquiry",
+    "新需求-App-多账号绑车": "ismart_feature_inquiry",
+    "新需求-App-多主题切换": "app_suggestion",
+    "新需求-App-分时段预约充电": "ismart_feature_inquiry",
+    "新需求-App-预约维保": "delivery_handover",
+    "新需求-App-预约座椅加热": "ismart_feature_inquiry",
+    "新需求-App-远控关灯": "ismart_feature_inquiry",
+    "新需求-FICM- EV Trip Planner": "ismart_connectivity",
+    "请求完整车辆信息": "other",
+    "请求VIN/提示VIN位置": "other",
+    "VIN不正确": "other",
+    "请求视频/截图": "other",
+    "后台分析中": "other",
+    "非iSMART-充电相关": "charging",
+    "非iSMART-售前售后服务": "delivery_handover",
+    "非iSMART-不支持车型": "vehicle_incompatible",
+    "非iSMART-车身控制相关": "hardware_warranty",
+    "非iSMART-空调相关": "hardware_warranty",
+    "ADAS相关": "adas_acc",
+    "IPK相关": "hardware_warranty",
+    "非iSMART-功能咨询": "hardware_warranty",
+    "Adas-ACC": "adas_acc",
+    "Adas-AEB": "adas_aeb",
+    "Adas-LKA": "adas_lka",
+    "Adas-TJA": "adas_tja",
+    "非iSMART-IPK相关": "hardware_warranty"
+  }
+}

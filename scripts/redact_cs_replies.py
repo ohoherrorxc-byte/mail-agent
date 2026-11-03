@@ -59,7 +59,7 @@ _QUOTED_HISTORY_MARKERS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\n+From\s*:\s", re.I),
     re.compile(r"\n+De\s*:\s", re.I),
     # 邮件签名后直接跟历史（少 <br><br>，靠 "Best regards," / "Mit freundlichen" 等切分）
-    re.compile(r"\n+Best regards,\s*\n\s*Ismart-service team\b", re.I),
+    re.compile(r"\n+Best regards,\s*\n\s*iSMART Service Team\b", re.I),
     re.compile(r"\n+Mit freundlichen Grüßen\b", re.I),
     re.compile(r"\n+cordiali saluti\b", re.I),
     re.compile(r"\n+cordialement\b", re.I),
@@ -71,7 +71,7 @@ def extract_cs_reply(body_text: str) -> str:
     """从 body 切出客服回复正文（去掉 quoted history）。
 
     body_text 应该是 strip_html() 之后的纯文本。返回客服实际回复的纯文本
-    （包含 "Dear customer,<br><br>..." 开头到 "Best regards,<br>Ismart-service team" 结束）。
+    （包含 "Dear customer,<br><br>..." 开头到 "Best regards,<br>iSMART Service Team" 结束）。
     """
     if not body_text:
         return ""
@@ -99,8 +99,8 @@ _CS_OPENER_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 _CS_SIGNATURE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\bIsmart-service team\b", re.I),
-    re.compile(r"\biSMART-Service Team\b", re.I),
+    re.compile(r"\biSMART Service Team\b", re.I),
+    re.compile(r"\biSMART Service Team\b", re.I),
     re.compile(r"\bIsmart Customer Service\b", re.I),
     re.compile(r"\bMG Europe (customer service|CS|support)\b", re.I),
     re.compile(r"\bMit freundlichen Grüßen\b", re.I),
@@ -128,15 +128,20 @@ _TLD_TO_REGION: dict[str, str] = {
     "se": "Europe", "dk": "Europe", "fi": "Europe", "no": "Europe",
     "ie": "Europe", "lu": "Europe", "ee": "Europe", "lv": "Europe",
     "lt": "Europe",
+    "tr": "Europe", "ru": "Europe", "by": "Europe",
     # UK
     "uk": "United Kingdom",
     # Oceania
     "au": "Oceania", "nz": "Oceania",
-    # Asia
+    # Middle East（对照表「中东」；不含土耳其）
+    "ae": "Middle East", "sa": "Middle East", "qa": "Middle East",
+    "kw": "Middle East", "om": "Middle East", "bh": "Middle East",
+    "il": "Middle East", "lb": "Middle East", "jo": "Middle East",
+    "iq": "Middle East",
+    # Asia（不含 GCC / 以色列 / 俄罗斯）
     "cn": "Asia", "jp": "Asia", "kr": "Asia", "sg": "Asia",
     "in": "Asia", "my": "Asia", "th": "Asia", "ph": "Asia",
-    "vn": "Asia", "id": "Asia", "ae": "Asia", "sa": "Asia",
-    "qa": "Asia", "kw": "Asia", "il": "Asia", "tr": "Asia",
+    "vn": "Asia", "id": "Asia",
     # Americas
     "us": "North America", "ca": "North America", "mx": "South America",
     "br": "South America", "ar": "South America", "cl": "South America",

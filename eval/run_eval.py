@@ -43,7 +43,7 @@ except ImportError:
     pass
 
 from agent import AzureLLMClient, EmailAgent                # noqa: E402
-from agent.email_agent import NeedsHumanEscalation          # noqa: E402
+from agent.email_agent import NeedsHumanEscalation, classify_intent  # noqa: E402
 from agent.prompts import TRIAGE_SYSTEM                     # noqa: E402
 from agent.schemas import TriageResult                      # noqa: E402
 
@@ -102,8 +102,26 @@ class SampleOutcome:
 # ── 评测主循环 ───────────────────────────────────────────────
 
 def run_eval(samples: list[dict], agent: EmailAgent,
-             triage_only: bool = False) -> list[SampleOutcome]:
+             triage_only: bool = False, hybrid: bool = False) -> list[SampleOutcome]:
     outcomes: list[SampleOutcome] = []
+
+    # ── hybrid: keyword 先判 intent（仅 triage_only 生效）───────────
+    # 走 EmailAgent.classify_intent() 统一入口 —— 与 EmailAgent.handle_email
+    # 的 hybrid override 用同一份逻辑。
+    if hybrid:
+        try:
+            from agent.email_agent import load_keyword_resources
+            _kw_index, _kw_curated = load_keyword_resources()
+            LOG.warning(
+                "[eval] hybrid=on: keyword pre-judge intent (high conf + "
+                "intent!='other' → override LLM intent). curated=%s",
+                "eval/_intent_keyword_curated.json" if _kw_curated else "(none)",
+            )
+        except Exception as e:
+            LOG.warning("[eval] hybrid=on but keyword load failed: %s", e)
+            _kw_index, _kw_curated = None, None
+    else:
+        _kw_index, _kw_curated = None, None
 
     for i, s in enumerate(samples, 1):
         sample_id = s["id"]
@@ -130,6 +148,18 @@ def run_eval(samples: list[dict], agent: EmailAgent,
         # retrieval / drafting / compliance ——用于在 M1 还只覆盖 NA 合规
         # 规则时评估 Triage 准确率，不让 NA 规则误审 EU/UK 客户。
         if triage_only:
+            kw_top, kw_conf, kw_should_override, kw_override_intent = None, "none", False, None
+            kw_prev_intent = None
+            if _kw_index is not None:
+                kw_res = classify_intent(
+                    s["email"], s.get("subject", ""),
+                    kw_index=_kw_index, curated=_kw_curated,
+                )
+                kw_top = kw_res["kw_top"]
+                kw_conf = kw_res["kw_conf"]
+                kw_should_override = kw_res["should_override"]
+                kw_override_intent = kw_res["override_intent"]
+
             try:
                 triage, _c = agent.llm.invoke_json(
                     schema=TriageResult,
@@ -140,6 +170,13 @@ def run_eval(samples: list[dict], agent: EmailAgent,
                     reasoning_effort="low",
                     role="triage",
                 )
+                # hybrid override：keyword high + intent != other → 覆盖 LLM intent
+                # sub_intent 不改（curated 模板 sub_intent=unknown，强行给会破 routing）
+                overridden = False
+                if kw_should_override and triage.intent != kw_override_intent:
+                    kw_prev_intent = triage.intent
+                    triage.intent = kw_override_intent
+                    overridden = True
                 out.intent_pred            = triage.intent
                 out.urgency_pred           = triage.urgency
                 out.region_pred            = triage.region
@@ -152,7 +189,16 @@ def run_eval(samples: list[dict], agent: EmailAgent,
                 # red_flags 真值表对照
                 out.escalated = bool(triage.red_flags)
                 out.escalate_reason = f"triage_only: red_flags={triage.red_flags}"
-                out.audit = {"triage_only": True, "calls": [_as_audit(_c)]}
+                out.audit = {
+                    "triage_only": True,
+                    "calls": [_as_audit(_c)],
+                    "kw_top":            kw_top,
+                    "kw_conf":           kw_conf,
+                    "kw_should_override": kw_should_override,
+                    "kw_overridden":     overridden,
+                    "kw_override_intent": kw_override_intent,
+                    "kw_prev_intent":    kw_prev_intent,
+                }
                 _accumulate_tokens(out, _c)
                 out.latency_ms = int((time.time() - t0) * 1000)
                 outcomes.append(out)
@@ -459,6 +505,10 @@ def main() -> int:
     p.add_argument("--triage-only", action="store_true",
                    help="只跑 Triage 步骤就停；用于在 M1 还没扩合规规则前"
                         "评估 Triage 准确率，不让 NA 规则误审 EU/UK 客户")
+    p.add_argument("--hybrid", choices=["off", "on"], default="off",
+                   help="on = keyword_classifier 先判 intent，confidence>=high 时覆盖 LLM 的 intent/sub_intent；"
+                        "其它字段 (urgency/region/red_flags/language) 仍走 LLM。"
+                        "仅在 --triage-only 下生效。")
     args = p.parse_args()
 
     with open(args.samples, encoding="utf-8") as f:
@@ -474,7 +524,7 @@ def main() -> int:
         return 3
 
     agent = EmailAgent(llm=client)
-    outcomes = run_eval(samples, agent, triage_only=args.triage_only)
+    outcomes = run_eval(samples, agent, triage_only=args.triage_only, hybrid=(args.hybrid == "on"))
     metrics = aggregate(outcomes)
     if args.triage_only:
         print("[eval] TRIAGE-ONLY mode: skipping region gate / retrieval / drafting / compliance")

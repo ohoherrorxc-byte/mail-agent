@@ -62,7 +62,7 @@ LOG = logging.getLogger("reclassify_cs_replies")
 
 _CLOSING_MARKERS = (
     r"Best regards,?\s*\n?\s*[Ii]?[Ss]mart[- ]service team",
-    r"Best regards,?\s*\n?\s*iSMART-Service Team",
+    r"Best regards,?\s*\n?\s*iSMART Service Team",
     r"Best regards,?\s*\n?\s*[Ii]smart Customer Service",
     r"Best regards,?\s*\n?\s*MG Europe (customer service|CS|support)",
     r"Mit freundlichen Grüßen",

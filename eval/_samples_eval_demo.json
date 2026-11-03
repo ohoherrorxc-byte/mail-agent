@@ -1,0 +1,821 @@
+[
+  {
+    "id": "cand_5c982465",
+    "email": "Subject: Re: 回复: Help VIN_MASK_5f67d7bd problemi di collegamento\nFrom: giancarlo bemer\nReceived: 2026-02-02T09:15:13Z\n\nGrazie, ora l'auto è stata sbloccata e ho potuto caricare i miei dati. Grazie della collaborazione    Sent: Monday, February 02, 2026 at 9:08 AM\nFrom: &quot;customer.care&quot; <user_e7d0e47b@example.com>\nTo: &quot;giancarlo bemer&quot; <user_d683de46@example.com>\nSubject: 回复: Help VIN_MASK_5f67d7bd problemi di collegamentoDear customer, Thanks for your email. According to the database records, your vehicle was bound on user_d683de46@example.com. If the issue persists, please contact us any time. Thank you! Best regards, ismart-service team 发件人: giancarlo bemer <user_d683de46@example.com>\n发送时间\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T09:15:13Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_38b0754c",
+    "email": "Subject: Problemi con il veicolo o l'app iSMART\nFrom: vincenzo merola\nReceived: 2026-02-01T22:05:15Z\n\nCaro team di assistenza iSMART,\r\n\r\n\r\nSpero che questo messaggio vi trovi bene.\r\n\r\n\r\nScrivo per segnalare i problemi che sto attualmente riscontrando con il mio veicolo o l'app iSMART. Per aiutarvi a diagnosticare e risolvere efficacemente i problemi, ecco i dettagli rilevanti:\r\n• Paese/Regione: Italia\r\n• Marca: MG\r\n• Modello di veicolo: ZS\r\n• Numero di identificazione del veicolo: VIN_MASK_d849dcbf\r\n• Tipo di problema: Il mio profilo\r\n• Descrizione dei problemi: Buongiorno, sto avendo difficoltà nell’aggiungere un account secondario al mio veicolo. Ho già fatto registrare mia moglie con l’indi\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T22:05:15Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_99542f81",
+    "email": "Subject: Re: Login issues\nFrom: Sharon Kaur\nReceived: 2026-02-01T16:13:57Z\n\nHi, thanks for this and apologies for the delay.  \nMy details are as follows: \nCountry/ region: UK Brand: MG4 EV VIN: VIN_MASK_0424f232\nPlease let me know if you need any further information.\nThank you,Sharon \nOn 8 Jan 2026, at 15:28, customer.care <user_e7d0e47b@example.com> wrote:o",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T16:13:57Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_d0297ebf",
+    "email": "Subject: Re: Problèmes avec le Véhicule ou l'Application iSMART\nFrom: Benjamin V\nReceived: 2026-02-02T08:16:43Z\n\nBonjour,\nYes for ismart account its good, i connect it with my wifi from my phone, but now the problem is no sos call ( i have a red logo on my screen ) with the 4g appear disappear like 5time with 30minutes driving, i can't see my vehicle on ismart, the mg4 is unavaible ( screen ). A searched on the forums, a lot talk about the TBOX need an update or a replacement.\nDo you have further information ?Have a good day.\n\n\n\n\nLe lun. 2 févr. 2026, 09:00, customer.care <user_e7d0e47b@example.com> a écrit :\nDear customer,\nThanks for your email.\nAfter several days of continuous monitoring, it is found t\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T08:16:43Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_3350e787",
+    "email": "Subject: Problemen met Voertuig of iSMART App\nFrom: Henny Rol\nReceived: 2026-02-01T11:19:51Z\n\nGeachte iSMART-serviceteam,\r\n\r\n\r\nIk hoop dat deze bericht u goed bereikt.\r\n\r\n\r\nIk schrijf om de problemen te melden die ik momenteel ervaar met mijn voertuig of de iSMART-app. Om u te helpen bij het diagnosticeren en effectief oplossen van de problemen, vindt u hier de relevante details:\r\n• Land/Regio: Nederland\r\n• Merk: MG\r\n• Voertuigmodel: MG5 Electric\r\n• Voertuigidentificatienummer: VIN_MASK_989b219b\r\n• Probleemtype: Anderen\r\n• Beschrijving van problemen: Ik krijg sinds vanmorgen steeds de melding dat mijn account op een ander apparaat is ingelogd.\r\nIk moet dan zelf weer inloggen op mijn te\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T11:19:51Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_462694eb",
+    "email": "Subject: WG: [External] Registrierung MG ismart App\nFrom: Eric Ruscher\nReceived: 2026-02-02T12:58:42Z\n\nSehr geehrtes ismart Service Team,\n\n \n\nich habe versucht einen neuen Account bei MG ismart zu erstellen. Leider habe ich trotz mehrmaliger versuch, noch keine E-Mail zur Bestätigung meines Accounts auf das angegebene E-Mail-Konto erhalten.\n\nSo ist leider keine Registrierung möglich.\n\n \n\nDas angegebene E-Mail-Konto lautet user_66ddea6b@example.com.\n\n \n\nÜber eine schnelle Prüfung und eine Zeitnahe Rückmeldung würde ich mich sehr freuen.\n\n \n\n \n\nMit freundlichen Grüßen \n\n \n\nEric Ruscher\nMG-Verkäufer\n\n\n\n\n\nFranke Automobile GmbH & Co. KG\nDresdner Straße 42 • 09599 Freiberg\n\nTel.: \n\nPHONE_MASK_614991\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T12:58:42Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_250bcaca",
+    "email": "Subject: MG Romania Requests to Unlink Old iSmart App Users\nFrom: Oliver Strimbei\nReceived: 2026-02-02T07:27:13Z\n\nHello Gents,\n\n \n\nWe have three requests pending at the moment.\n\nAttached messages.\n\n \n\nss. VIN_MASK_0d36dd60. E-mail sent Fri 01/23/2026.\n\nss. VIN_MASK_1560900d. E-mail sent Mon 01/19/2026.\n\nss. VIN_MASK_1502d6d6. E-mail sent Mon 01/19/2026.\n\n \n\nCan you help us please?\n\nIt is very important to respond as soon as possible.\n\n \n\nThank you in advance for your help.\n\nRegards from Bucharest,\n\n \n\nMG AS Team\n\n \n\n \n\n\n\nOliver Strîmbei\n\nCustomer Relationship Manager\n\n \n\nQuantum Auto Max\n\nMG Motor Official Distributor Romania\n\n \n\nMobile: PHONE_MASK_aa3c5a06\nEmail:user_af69bc9d@example.com\n\n \n\n73-81 Bucure\n... [truncated]",
+    "truth": {
+      "intent": "app_account",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_account; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T07:27:13Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_4ffe1ee1",
+    "email": "Subject: Re:回复: Problemen met Voertuig of iSMART App\nFrom: Janssens Goran\nReceived: 2026-02-02T08:35:53Z\n\nGood morning , I don’t have the same  icons on my screen in the car , clocks are at the exact same time . I do get an other e mail adres on the screen ( not mine ) I think previous owner ( car is 2 years and 3 months old ) What step is next ? Regards Goran Janssens\n\n\nVerzonden via Yahoo Mail voor iPad\n\nOp maandag, februari 2, 2026, 9:16 AM schreef customer.care <user_e7d0e47b@example.com>:\n\n\r\n\r\nDear customer,Thank you for your email.As your feedback involves technical details, we kindly request the following information to help us better assist you:1. Country/region2. Brand3. Vehicle Identific\n... [truncated]",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T08:35:53Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_c7d216e4",
+    "email": "Subject: Re: Issues with Vehicle or iSMART App\nFrom: Simon Pearse\nReceived: 2026-02-02T17:43:30Z\n\nAwesome, thank you. I had to set the clock to Sydney time. \nRegards, \nSimon\nOn Mon, 2 Feb 2026, 12:39 pm customer.care, <user_e7d0e47b@example.com> wrote:\nDear Customer,Thank you for your message.Please try manually setting the date, time, and time zone on the vehicle system, then retry scanning the QR code to bind the vehicle.If it still fails, please set the time zone to Sydney and adjust the time accordingly, then try binding again.Best regards,\niSmart Service Team\n发件人: Simon Pearse <user_8a5d7726@example.com>\n发送时间: 2026年1月31日 4:00\n收件人: customer.care <user_e7d0e47b@example.com>\n主题: Issues w\n... [truncated]",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T17:43:30Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_ddff3607",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: Dan Champion\nReceived: 2026-02-02T12:25:46Z\n\nDear iSMART service team,\r\n\r\nI hope this message finds you well.\r\n\r\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n• Country/Region: United Kingdom\r\n• Brand:\r\n• Vehicle Model:\r\n• Vehicle Identification Number:\r\n• Issue Type: Login & Logout\r\n• Description of Issues: I’m trying to pair the app up with my car and every time I scan the QR code it says successful and then it takes me back to scan the QR code and it doesn’t pair. I to\n... [truncated]",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T12:25:46Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_148fb974",
+    "email": "Subject: Re:回复: Problemen met Voertuig of iSMART App\nFrom: Janssens Goran\nReceived: 2026-02-02T08:38:28Z\n\nGood morning , region is Belgium Europe its an mg4e vin number LSJWH4099PN055941Regards Goran Janssens\n\n\nVerzonden via Yahoo Mail voor iPad\n\nOp maandag, februari 2, 2026, 9:35 AM schreef Janssens Goran <user_66de169e@example.com>:\n\nGood morning , I don’t have the same  icons on my screen in the car , clocks are at the exact same time . I do get an other e mail adres on the screen ( not mine ) I think previous owner ( car is 2 years and 3 months old ) What step is next ? Regards Goran JanssensVerzonden via Yahoo Mail voor iPadOp maandag, februari 2, 2026, 9:16 AM schreef customer.care <user_e7d\n... [truncated]",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T08:38:28Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_4ef0016b",
+    "email": "Subject: Re: Issues with Vehicle or iSMART App\nFrom: Terry Lucas\nReceived: 2026-02-02T19:23:56Z\n\nThank you for the reply. I have not seen an “inbox” anywhere on the infotainment system but will check again. RegardsTerry Lucas0434 937803\n\n\nOn 2 Feb 2026, at 9:43 am, customer.care <user_e7d0e47b@example.com> wrote:\n\n&#65279; Dear Customer,Thank you for your enquiry.For the MG U9, the vehicle binding function is located within the “Inbox” app on the vehicle head unit.\nPlease open the Inbox application on the vehicle system, then use the iSmart app to scan the QR code shown on the screen to log in and bind the vehicle.If you are unable to find the Inbox app or still experience issues, please \n... [truncated]",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T19:23:56Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_4379ba98",
+    "email": "Subject: Linking car to app \nFrom: Akash Bodalia\nReceived: 2026-02-02T17:28:01Z\n\nMG iSMART only allows QR code binding. \n\n\n\n\nMy MG5 EV Exclusive 2022 does not have a QR code or bind option. \n\n\n\n\nPlease bind the vehicle manually using VIN: VIN_MASK_10bc513d\n\n\nNumber plate: LY71 DJF \nSent from my iPhone",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T17:28:01Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_da1313c9",
+    "email": "Subject: Connexion\nFrom: Gregory Chauzu\nReceived: 2026-02-02T16:36:07Z\n\nImpossible d'afficher le QR code sur la tablette pour connecter le telephone\nCordialement,\nGrégory CHAUZU\n06.76.85.39.81",
+    "truth": {
+      "intent": "app_binding",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=app_binding; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T16:36:07Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_e72d211b",
+    "email": "Subject: RE: MG HS 2024 Trophy - iSmart Issues [ thread::DXl4Wfb6Eum8HU8t5BJsZR8:: ]\nFrom: ian.donaldson@me.com\nReceived: 2026-02-02T10:58:31Z\n\nGood Morning,\n\n \n\nPlease find the following information.\n\n \n\n1. Brand - MG\n\n2. Vehicle Model – HS Trophy (2025)\n\n3. Vehicle Identification Number (VIN) – VIN_MASK_8686f83e\n\n4. Mobile Phone Model and System Version – Samsung S25 + (SM-S963B) – Android 16\n\n5. iSMART App Version – 3.0.4\n\n6. Detailed Description of the Issue, if possible, a video demonstrating the issue – See below\n\n \n\nMyself and other users have reported the same issue on multiple forums.\n\nWhen using the iSmart app to turn on functions it simply does not work.\n\n \n\nExample:\n\n \n\niSmart App – Turn on heating and/or turn on heated se\n... [truncated]",
+    "truth": {
+      "intent": "ismart_remote_control",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_remote_control; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T10:58:31Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_065731e7",
+    "email": "Subject: Fwd: 2025 MG HS PHEV Trophy\nFrom: Gordon Smith\nReceived: 2026-02-02T20:07:56Z\n\nHello.\nHave you had an opportunity to consider the under noted information I sent through on 26th January?Trusting to hear from you.\nBest wishes \nGordon Smith\n---------- Forwarded message ---------\nFrom: Gordon Smith <user_060fa6cf@example.com>\nDate: Mon, 26 Jan 2026 at 11:12\nSubject: Re: 2025 MG HS PHEV Trophy\nTo: customer.care <user_e7d0e47b@example.com>\n\n\nGood morning and thanks for your email.  Here is the information as requested;\n1.  Scotland/United Kingdom/Europe2.  MG3.  HS Trophy PHEV4.  LSJW94390RG0680615.  iPhone 14 Plus. iOS 26.26.  iSMART version 3.1.37.  The heated front seats do\n... [truncated]",
+    "truth": {
+      "intent": "ismart_remote_control",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_remote_control; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T20:07:56Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_78573230",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: William Hancock\nReceived: 2026-02-01T17:32:23Z\n\nDear iSMART service team,\n\nI hope this message finds you well.\n\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\n• Country/Region: United Kingdom\n• Brand: MG\n• Vehicle Model: MG4 Electric\n• Vehicle Identification Number: VIN_MASK_5a6cc978\n• Issue Type: Digital Key\n• Description of Issues: DIGITAL KEY NOT WORKING\n\nREMOTE CONTROL NOT WORKING\n\nI'M STRANDED 5 MILES AWAY FROM HOME\n\nGET YOUR SHIT TOGETHER! \n\nI can read the latest Privacy\n... [truncated]",
+    "truth": {
+      "intent": "ismart_digital_key",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_digital_key; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T17:32:23Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_12ef1a2f",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: Aditya Gupta\nReceived: 2026-02-02T21:06:23Z\n\nDear iSMART service team,\r\n\r\nI hope this message finds you well.\r\n\r\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n• Country/Region: United Kingdom\r\n• Brand: MG ZS EV\r\n• Vehicle Model:Trophy long range 2022\r\n• Vehicle Identification Number: BC22HNW\r\n• Issue Type: Digital Key\r\n• Description of Issues: Hi I have bought my MG used from a dealer with reg BC22HNW I have tried to bind my vehicle i have waited 72 hours but its not work\n... [truncated]",
+    "truth": {
+      "intent": "ismart_digital_key",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_digital_key; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T21:06:23Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_0a17d837",
+    "email": "Subject: Problemas con el Vehículo o la Aplicación iSMART\nFrom: José Enrique Serrano\nReceived: 2026-02-01T10:49:14Z\n\nEstimado equipo de servicio iSMART,\r\n\r\n\r\nEspero que este mensaje les encuentre bien.\r\n\r\n\r\nLes escribo para reportar los problemas que estoy experimentando actualmente con mi vehículo o la aplicación iSMART. Para ayudarles a diagnosticar y resolver los problemas de manera efectiva, encuentren los detalles relevantes a continuación:\r\n• País/Región: España\r\n• Marca: MG\r\n• Modelo de vehículo: MGS5 EV\r\n• Número de identificación del vehículo: VIN_MASK_c80ce238\r\n• Tipo de problema: Otros\r\n• Descripción de los problemas: No está en la App el manual de usuario de mi vehículo MGS5 EV año 2025 en españo\n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T10:49:14Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_3a501dc5",
+    "email": "Subject: Problemi con il veicolo o l'app iSMART\nFrom: nu vei\nReceived: 2026-02-02T20:33:50Z\n\nCaro team di assistenza iSMART,\n\n\nSpero che questo messaggio vi trovi bene.\n\n\nScrivo per segnalare i problemi che sto attualmente riscontrando con il mio veicolo o l'app iSMART. Per aiutarvi a diagnosticare e risolvere efficacemente i problemi, ecco i dettagli rilevanti:\n• Paese/Regione: Italia\n• Marca: MG\n• Modello di veicolo: ZS32 X2\n• Numero di identificazione del veicolo: VIN_MASK_9ecbe55f\n• Tipo di problema: Altri\n• Descrizione dei problemi: non funzionano i tergicristalli anteriori\n\n\nPosso leggere l'ultima Informativa sulla privacy per maggiori dettagli sulle attività di trattamento dei \n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T20:33:50Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_6c3b0c99",
+    "email": "Subject: Re: Issues with Vehicle or iSMART App\nFrom: David Stephenson\nReceived: 2026-02-02T14:17:41Z\n\nSent from my iPhone\r\n\r\n> On 29 Jan 2026, at 17:17, David Stephenson  wrote:\r\n> \r\n> ﻿Dear iSMART service team,\r\n> \r\n> I hope this message finds you well.\r\n> \r\n> I'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n> • Country/Region: United Kingdom\r\n> • Brand: MG\r\n> • Vehicle Model: ZS11EMCEUK\r\n> • Vehicle Identification Number: VIN_MASK_7cb72c0c\r\n> • Issue Type: Others\r\n> • Description of Issues: How do I find out what my password is \n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T14:17:41Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_ecb7a222",
+    "email": "Subject: Probleme cu vehiculul sau aplicația iSMART\nFrom: Octavian Popescu\nReceived: 2026-02-01T10:43:55Z\n\nStimate echipă de servicii iSMART,\n\n\nSper că acest mesaj vă găsește bine.\n\n\nVă scriu pentru a raporta problemele pe care le întâmpin în prezent fie cu vehiculul meu, fie cu aplicația iSMART. Pentru a vă ajuta să diagnosticați și să rezolvați eficient problemele, vă rog să găsiți detaliile relevante:\n• Țară/Regiune: \n• Marcă: \n• Model vehicul: \n• Număr de identificare vehicul: \n• Tip problemă: Gestionarea vehiculului\n• Descrierea problemelor: cum pot să găsesc codul Qr pentru scanare și logare cu aplicația MG ?\n\n\nPot citi cea mai recentă Notificare de confidențialitate pentru mai multe detalii \n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T10:43:55Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_50e113fe",
+    "email": "Subject: Re: Issues with Vehicle or iSMART App\nFrom: john garnett\nReceived: 2026-02-02T09:42:58Z\n\nThanks for the response. It appears the problem has resolved itself as I can now access the manual on my app. \nThanks \n\nSent from my HONOR phone\n\n-------- Original message --------\nFrom: &quot;customer.care&quot; <user_e7d0e47b@example.com>\nDate: Mon, 2 Feb 2026, 09:39\nTo: john garnett <user_4a318a09@example.com>\nSubject: 回复: Issues with Vehicle or iSMART App\nDear customer,\nThanks for your email.\nWe are rapidly analyzing the issue and will notify you as soon as there is any progress.\nThank you!\nBest regards,\nismart-service team发件人: john garnett <user_4a318a09@example.com>\n发送时间: 2026年1月24日 2:31\n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T09:42:58Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_cfda78fa",
+    "email": "Subject: Probleme mit dem Fahrzeug oder der iSMART App\nFrom: Marco Hallmeyer\nReceived: 2026-02-01T08:46:22Z\n\nSehr geehrtes iSMART-Service-Team,\r\n\r\n\r\nich hoffe, diese Nachricht findet Sie wohlauf.\r\n\r\n\r\nIch schreibe Ihnen, um die Probleme zu melden, die ich derzeit entweder mit meinem Fahrzeug oder der iSMART-App habe. Um Ihnen bei der effektiven Diagnose und Behebung der Probleme zu helfen, finden Sie hier die relevanten Details:\r\n• Land/Region: Deutschland\r\n• Marke: MG\r\n• Fahrzeugmodell: MG4 Electric\r\n• Fahrzeug-Identifizierungsnummer: VIN_MASK_f988a3ae\r\n• Art des Problems: Digitaler Schlüssel\r\n• Beschreibung der Probleme: Hallo,\r\nleider funktioniert das Schlüssellose starten meines MG4 nach einem So\n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T08:46:22Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_c1f0ce94",
+    "email": "Subject: Problemen met Voertuig of iSMART App\nFrom: benelux.danny@icloud.com\nReceived: 2026-02-02T19:08:33Z\n\nGeachte iSMART-serviceteam,\r\n\r\n\r\nIk hoop dat deze bericht u goed bereikt.\r\n\r\n\r\nIk schrijf om de problemen te melden die ik momenteel ervaar met mijn voertuig of de iSMART-app. Om u te helpen bij het diagnosticeren en effectief oplossen van de problemen, vindt u hier de relevante details:\r\n• Land/Regio: Spanje\r\n• Merk: MG\r\n• Voertuigmodel: ZS EV\r\n• Voertuigidentificatienummer: VIN_MASK_e771e4be\r\n• Probleemtype: Anderen\r\n• Beschrijving van problemen: Ik krijg CarPlay niet geconfigureerd!\r\n\r\n\r\nIk kan de laatste Privacyverklaring lezen voor meer details over de gegevensverwerkingsactiviteiten. Ik \n... [truncated]",
+    "truth": {
+      "intent": "ismart_privacy",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=ismart_privacy; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T19:08:33Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_25f99529",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: Andrew Lee\nReceived: 2026-02-02T23:11:09Z\n\nDear iSMART service team,\r\n\r\nI hope this message finds you well.\r\n\r\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n• Country/Region:\r\n• Brand: MG\r\n• Vehicle Model: ZS EV\r\n• Vehicle Identification Number: VIN_MASK_98985b4d\r\n• Issue Type: Charging Management\r\n• Description of Issues: Charging is erratic. I connect the lead and can access the car from the app, at which time I can see the location and successfully issue commands suc\n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T23:11:09Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_befcf01c",
+    "email": "Subject: Re: Problémy s vozidlem nebo aplikací iSMART\nFrom: Michal Lukáč\nReceived: 2026-02-02T10:28:52Z\n\nHello. I already once set percentage of charge and it works without problem... How is it possible, that it works and now it's itb not supported. I don't understand. And is there any way to communicate with car and since this with smart house from Loxone that it will solve the percentage charging issue? Thanks a lotWith best regardsMichal Lukáč\n\nDne po 2. 2. 2026 10:16 uživatel customer.care <user_e7d0e47b@example.com> napsal:\nDear customer,\nThank you for your email.\nYour vehicle does not support to set a target battery charge level or schedule battery heating.\nThank you for your cooperation an\n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T10:28:52Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_7718ead1",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: harrisonmark570@gmail.com\nReceived: 2026-02-02T08:41:11Z\n\nDear iSMART service team,\r\n \r\nI hope this message finds you well.\r\n \r\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n%2�%2 Country/Region: \r\n%2�%2 Brand: MG\r\n%2�%2 Vehicle Model: ZS EV\r\n%2�%2 Vehicle Identification Number: VIN_MASK_21b970b9\r\n%2�%2 Issue Type: Charging Management\r\n%2�%2 Description of Issues: stops changing.  will not do a full charge. \r\n\r\n \r\n \r\nI can read the latest Privacy Notice for more details of the data pr\n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T08:41:11Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_19f0e247",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: Tracy Cribb\nReceived: 2026-02-01T02:23:13Z\n\nDear iSMART service team,\n\nI hope this message finds you well.\n\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\n• Country/Region: United Kingdom\n• Brand: MG\n• Vehicle Model: HS Hybrid+\n• Vehicle Identification Number: VIN_MASK_c0f66802\n• Issue Type: Charging Management\n• Description of Issues: can you put usb c connectivity in the hs please instead of usb a connection \n\nI can read the latest Privacy Notice for more details of the \n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T02:23:13Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_aa3a0cb2",
+    "email": "Subject: Sv: Charge at Tesla\nFrom: Jan Nickel\nReceived: 2026-02-02T14:39:14Z\n\nCountry / region: SwedenBrand: MG Marvel R ElectricVIN-nr: VIN_MASK_c09180bf\nBest regardsJan NickelFra: customer.care <user_e7d0e47b@example.com>\nSendt: 29. januar 2026 09:04\nTil: Jan Nickel <user_f4aaf842@example.com>\nEmne: 回复: Charge at Tesla  \r\n\r\nDear customer,\nThanks for your email.\nPlease provide your Country/region, Brand and Vehicle identification number for further assistant.\nYour personal data will be used to monitor the status of your vehicle over the next several days and deleted right after our use, your personal data for after-sale troubleshooting will not be sold, neither retaine\n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T14:39:14Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_eecedc70",
+    "email": "Subject: Issues with Vehicle or iSMART App\nFrom: sourabh chauhan\nReceived: 2026-02-01T17:37:53Z\n\nDear iSMART service team,\r\n\r\nI hope this message finds you well.\r\n\r\nI'm writing to report the issues I am currently experiencing with either my vehicle or the iSMART App. In order to assist you with diagnosing and resolving the issues effectively, please find the relevant details:\r\n• Country/Region: Ireland\r\n• Brand: MG\r\n• Vehicle Model: MG4 Electric\r\n• Vehicle Identification Number: VIN_MASK_bb3fa461\r\n• Issue Type: Others\r\n• Description of Issues: Climate control doesn’t work from the app.\r\nCharging management doesn’t work from app or from car. Same with the charging schedule as well.\r\n\r\nI ca\n... [truncated]",
+    "truth": {
+      "intent": "charging",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=charging; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T17:37:53Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_b86fffa5",
+    "email": "Subject: Re: Re:\nFrom: Laurent Champ\nReceived: 2026-02-02T08:23:06Z\n\nBonjour tout fonctionne 👍 Merci bonne journée \nLe lun. 2 févr. 2026, 09:03, customer.care <user_e7d0e47b@example.com> a écrit :\nDear customer,\nThanks for your email.\nAccording to the database records, your vehicle was bound on 33 768520078 on 23-01-2026. \nIf the issue persists, please contact us any time.\nThank you!\nBest regards,\nismart-service team发件人: Laurent Champ <user_936ad661@example.com>\n发送时间: 2026年1月23日 17:36\n收件人: customer.care <user_e7d0e47b@example.com>\n主题: Re:  Bonjour je n'ai pas de retour de votre part concernant la désinstallation de l'ancien propriétaire ???? \nLe lun. 12 janv. 2\n... [truncated]",
+    "truth": {
+      "intent": "follow_up_resolved",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=follow_up_resolved; source=body_keyword",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T08:23:06Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_7d519791",
+    "email": "Subject: Desvinculación forzosa 6548MVW en MGiSmart\nFrom: Xavi González\nReceived: 2026-02-02T22:13:05Z\n\nEstimado equipo de soporte de MG iSmart:\n\nMe pongo en contacto con ustedes para informarles de que he adquirido recientemente un vehículo MG con matrícula 6548MVW y estoy teniendo problemas para vincularlo correctamente a la aplicación.\n\nAl iniciar el proceso de vinculación, la aplicación me indica que el vehículo ya se encuentra vinculado a una cuenta anterior. He seguido los pasos que la propia aplicación indica, solicitando la desconexión y esperando el plazo de 72 horas para que el anterior propietario confirme, rechace o ignore la solicitud. No obstante, ya han transcurrido más de tres e \n... [truncated]",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T22:13:05Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_30043488",
+    "email": "Subject: \nFrom: david bryant\nReceived: 2026-02-02T16:06:22Z\n\nGood afternoon,I was given this email address by MG technical so hope I am speaking to the right people. I own an MG ZS ev and have an issue with the app Is there anyway someone could contact me to helpRegards David Bryant Telephone Number 07976206898",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T16:06:22Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_cba44fc4",
+    "email": "Subject: MG ismart application\nFrom: Kamil Kołodziej\nReceived: 2026-02-02T16:53:40Z\n\nHi MG team\n\nNice application and features.\nStart engine and climate work good now.\nI have only one point to check. Seat heating does not work when turned on from the app.\nIt will be really useful in winter. Of course after start engine from Climate button.\n\nMG Hs 2025\nEurope version\nPoland\n\nIf you can fix it will be great &#128515;.\nRegards \nKamil",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T16:53:40Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_08ed445e",
+    "email": "Subject: Problemas com o Veículo ou Aplicativo iSMART\nFrom: ti pqd\nReceived: 2026-02-02T20:30:42Z\n\nCaro serviço iSMART,\n\n\nEspero que esta mensagem o encontre bem.\n\n\nEscrevo para relatar os problemas que estou atualmente a experimentar com o meu veículo ou com a aplicação iSMART. Para o ajudar a diagnosticar e resolver os problemas de forma eficaz, encontre os detalhes relevantes:\n• País/Região: Portugal\n• Marca: MG\n• Modelo do Veículo: MG4 Electric\n• Número de Identificação do Veículo: VIN_MASK_206c3f61\n• Tipo de Problema: Outros\n• Descrição dos Problemas: \no mapa de navegação do GPS, que neste momento não está mais à funcionar.\nObrigado antecipadamente pela sua atenção a este assunto. Agua\n... [truncated]",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T20:30:42Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_ab38f847",
+    "email": "Subject: MG Assist App\nFrom: Matt Webber\nReceived: 2026-02-01T23:22:21Z\n\nHello. \nWe purchased an MG ZS from MG at Robina in September last year. \nUnfortunately the car was stolen from our home on the weekend. \nWhen we reported it to the police, they mention that our MG may have been trackable via the MG Assist App. \nUnfortunately the availability of this App was NEVER pointed out to either me nor my wife (cc'ed) at Point of Sale, so we never 'bound' our phones to the car. \nIs there any way to bind the car and app retrospectively? \nI have attached the contract of sale for the car which contains relevant details. \nMatt Webber - Ph 0425724032\n-- \nCheers,\nMatt Webber",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-01T23:22:21Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_1b0cd8dc",
+    "email": "Subject: Re: Cyberster owner provisioning stuck - vehicle missing owner token LSJWN5063SNO7592\nFrom: Andreas Heinrich\nReceived: 2026-02-02T09:10:59Z\n\nDear iSMART Service Team,\n\n\n\n\nthis is my previous message below.\n\nPlease confirm that a support ticket has been created and that the Dealer → Customer Owner transfer for VIN VIN_MASK_f3ea2b9c is in progress.\n\n\n\n\nThank you.\n\n\nVon A.Heinrich via iPhone\nAm 30.01.2026 um 09:56 schrieb Andreas Heinrich <user_a36429ec@example.com>:\n\nDear iSMART Service Te",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T09:10:59Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  },
+  {
+    "id": "cand_bc57ac89",
+    "email": "Subject: MG ZS Hybrid+ , Bj. 12/2024\nFrom: Jürgen Kampe\nReceived: 2026-02-02T13:31:27Z\n\nHallo\n\n \n\nIch fordere den Austausch der Starterbatterie auf Garantiebasis.\n\nOffensichtlich ein bekanntes Problem.\n\n \n\nNach 3 Tagen nicht fahren und Aussentemperaturen von -3°C...-12°C ist die Batterie so gut wie entladen und das Fahrzeug startet nicht mehr!\n\nDas erste mal nach 4 Tagen bei -12°C hatte sie noch 3,5V. Nur mit Starthilfe konnte ich wieder Fahren\n\nDas 2. Mal nach 3 Tagen bei -3°C hatte sie noch 11,9V. Konnte grade noch mit dem Ladegerät aufladen.\n\n \n\n \n\n \n\nBest regards\n\nJürgen Kampe\n\n\n\nPlease note that our company MAN Energy Solutions Schweiz AG has been renamed to Everllence Schwe\n... [truncated]",
+    "truth": {
+      "intent": "other",
+      "urgency": "P2",
+      "region": "Europe",
+      "language": "en",
+      "country": "",
+      "requires_recall_check": false,
+      "requires_warranty_lookup": false,
+      "red_flags": []
+    },
+    "meta": {
+      "notes": "harvest v1; inferred=other; source=fallback",
+      "source": "harvest_samples.py demo",
+      "received_at": "2026-02-02T13:31:27Z",
+      "mailbox": "customer.care@ismart-service.com"
+    },
+    "expected_cited_doc_ids": []
+  }
+]

@@ -1,0 +1,111 @@
+exact_same_text 441
+alias_or_partial 69
+conflict 531
+no_issue 7
+multi_red 44
+UNKNOWN_RED
+   3 FICM-LOGIN相关
+   1 APP-纯抱怨
+ALIAS
+  15 ('iSMART-支持车区域', 'iSMART-支持区域')
+  13 ('绑车', 'App-绑车解绑相关')
+   4 ('missing_twin', ('App-绑车解绑相关',))
+   4 ('missing_twin', ('非iSMART-不支持车型',))
+   4 ('APP-蓝牙钥匙', 'App-蓝牙钥匙')
+   3 ('missing_twin', ('App-账号管理相关',))
+   3 ('missing_twin', ('FICM-LOGIN相关',))
+   3 ('App-无法记忆充电模式', 'APP-充电管理相关')
+   3 ('App-预约充电相关', 'APP-充电管理相关')
+   2 ('missing_twin', ('App-地图相关',))
+   2 ('FICM-自动重启', 'FICM-自动重启或黑屏')
+   1 ('missing_twin', ('iSMART-支持区域',))
+   1 ('missing_twin', ('App-车控车态相关',))
+   1 ('missing_twin', ('FICM-CPAA相关', '非iSMART-售前售后服务'))
+   1 ('missing_twin', ('FICM-地图相关',))
+   1 ('missing_twin', ('App-消息中心相关',))
+   1 ('missing_twin', ('非iSMART-IPK相关',))
+   1 ('IPK相关', '非iSMART-IPK相关')
+   1 ('missing_twin', ('App-优化建议',))
+CONFLICT
+  54 iSMART-支持区域 || App-绑车解绑相关
+  26 App-绑车解绑相关 || App-引导手册
+  17 App-车控车态相关 || FICM-CPAA相关
+  17 App-蓝牙钥匙 || iSMART-数字钥匙
+  12 App-车控车态相关 || App-绑车解绑相关
+  11 App-账号管理相关 || App-绑车解绑相关
+  10 App-车控车态相关 || App-软件更新
+   9 App-账号管理相关 || App-引导手册
+   9 iSMART-支持区域 || App-引导手册
+   9 App-账号管理相关 || FICM-激活相关
+   9 App-绑车解绑相关 || FICM-激活相关
+   8 非iSMART-售前售后服务 || TSP-敏感数据要求
+   8 iSMART-解绑需求 || App-绑车解绑相关
+   7 FICM-网络相关 || App-绑车解绑相关
+   7 App-蓝牙钥匙 || iSMART-功能咨询
+   7 iSMART-功能咨询 || App-引导手册
+   7 非iSMART-售前售后服务 || 非iSMART-车身控制相关
+   7 App-绑车解绑相关 || App-账号管理相关
+   7 iSMART-功能咨询 || App-账号管理相关
+   7 非iSMART-售前售后服务 || 非iSMART-功能咨询
+   6 App-绑车解绑相关 || App-软件更新
+   6 非iSMART-售前售后服务 || FICM-CPAA相关
+   6 iSMART-支持区域 || FICM-激活相关
+   5 App-车控车态相关 || 非iSMART-IPK相关
+   5 App-车控车态相关 || FICM-软件更新
+   5 App-车控车态相关 || 非iSMART-充电相关
+   4 非iSMART-不支持车型 || App-绑车解绑相关
+   4 非iSMART-售前售后服务 || iSMART-用户手册相关
+   4 非iSMART-车身控制相关 || 非iSMART-售前售后服务
+   4 非iSMART-售前售后服务 || App-绑车解绑相关
+   4 iSMART-支持区域 || App-账号管理相关
+   4 iSMART-功能咨询 || App-车控车态相关
+   4 iSMART-支持区域 || FICM-CPAA相关
+   4 App-车控车态相关 || FICM-激活相关
+   4 App-消息中心相关 || App-车控车态相关
+   3 App-绑车解绑相关 || App-车控车态相关
+   3 APP-充电管理相关 || App-车控车态相关
+   3 非iSMART-车身控制相关 || 非iSMART-IPK相关
+   3 非iSMART-充电相关 || 非iSMART-IPK相关
+   3 App-引导手册 || App-绑车解绑相关
+RED_FREQ
+ 180 App-绑车解绑相关
+ 140 App-车控车态相关
+ 128 iSMART-支持区域
+ 101 非iSMART-售前售后服务
+  87 App-账号管理相关
+  69 iSMART-功能咨询
+  53 非iSMART-车身控制相关
+  36 App-蓝牙钥匙
+  25 App-消息中心相关
+  23 非iSMART-不支持车型
+  22 非iSMART-功能咨询
+  21 iSMART-用户手册相关
+  19 FICM-网络相关
+  17 非iSMART-充电相关
+  16 FICM-地图相关
+  16 APP-充电管理相关
+  13 App-地图相关
+  13 App-优化建议
+  13 FICM-CPAA相关
+  12 FICM-软件更新
+  11 FICM-隐私协议相关
+   9 App-引导手册
+   8 iSMART-解绑需求
+   7 FICM-Online Service相关
+   6 Adas-ACC
+   6 非iSMART-IPK相关
+   6 FICM-系统设置
+   5 非iSMART-空调相关
+   5 FICM-Radio相关
+   5 FICM-自动重启或黑屏
+   4 FICM-Voice Service相关
+   4 FICM-蓝牙相关
+   4 iSMART-翻译相关
+   3 FICM-LOGIN相关
+   2 FICM-激活相关
+   1 Adas-LKA
+   1 APP-纯抱怨
+   1 FICM-Volume相关
+   1 App-软件更新
+   1 FICM-Music相关
+   1 App-能耗统计相关

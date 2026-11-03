@@ -55,6 +55,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional
 
 from .azure_llm import AzureLLMClient, LLMCall, ReasoningEffort, EmptyCompletionError
@@ -65,13 +66,16 @@ from .prompts import (
     COMPLIANCE_SYSTEM,
     check_forbidden_phrasings,
     REFLECTION_SYSTEM,
-    SUPPORTED_REGIONS_M2,
     _resolve_region_key,
     build_compliance_system,
 )
 from .template_reply import (
     load_xlsx as _load_xlsx_templates,
+    pick_template as _pick_template,
     _check_template_forbidden,
+    europe_service_subscription_needs_human,
+    ismart_plan_or_3g_needs_human,
+    fraud_force_unbind_needs_human,
 )
 from .schemas import (
     ComplianceResult,
@@ -80,6 +84,85 @@ from .schemas import (
     TriageResult,
 )
 from .tools import MockCustomerCRM, MockKnowledgeBase
+
+# M2.6: keyword pre-judge intent，给 triage 阶段当 fallback/补盲
+_KW_INDEX: Optional[dict] = None
+_KW_CURATED: Optional[dict[str, list[str]]] = None
+# M2.6.1: curated intents 是 keyword 唯一可信的源（模板库没有 → keyword 命中
+# 一定是真实客户痛点）。这些 intent 的 medium conf 也允许 override。
+_KEYWORD_OVERRIDE_MIN_CONF = "high"   # 通用：只 high 才覆盖（防扳错）
+_KEYWORD_OVERRIDE_CURATED_INTENTS: frozenset[str] = frozenset({
+    "ismart_region_support",
+    "ismart_connectivity",
+    "ismart_feature_inquiry",
+    "ismart_owner_change",
+    "ismart_fota",
+    "complaint",
+    "app_suggestion",
+})
+
+
+def load_keyword_resources() -> tuple[dict, Optional[dict]]:
+    """懒加载 keyword index + curated 短语补丁。"""
+    global _KW_INDEX, _KW_CURATED
+    if _KW_INDEX is None:
+        from scripts.intent_keyword_classifier import _load_index
+        _KW_INDEX = _load_index()
+        _curated_p = Path(__file__).resolve().parent.parent / "eval" / "_intent_keyword_curated.json"
+        _KW_CURATED = json.loads(_curated_p.read_text(encoding="utf-8")) if _curated_p.exists() else None
+    return _KW_INDEX, _KW_CURATED
+
+
+def classify_intent(
+    email_body: str,
+    subject: str = "",
+    *,
+    kw_index: Optional[dict] = None,
+    curated: Optional[dict[str, list[str]]] = None,
+) -> dict:
+    """M2.6 hybrid: keyword pre-judge intent（替代 LLM 或与 LLM 投票）。
+
+    Returns:
+      {
+        "kw_top":           dict | None,  # keyword top-1 候选 (含 template_id/score/intent)
+        "kw_conf":          "high"|"medium"|"low"|"none",
+        "kw_candidates":    [top-K ...],
+        "should_override":  bool,         # high conf + intent != other → True
+        "override_intent":  str | None,   # keyword 推荐的（"should_override" 时有效）
+      }
+
+    规则：
+      - confidence="high" + intent != "other" → should_override=True
+      - 否则 → 不覆盖（保留 LLM 的 triage）
+    """
+    if kw_index is None or curated is None:
+        kw_index, curated = load_keyword_resources()
+    from scripts.intent_keyword_classifier import classify as _kw_classify
+    result = _kw_classify(email_body, subject, kw_index, curated=curated)
+    top = result.get("top")
+    conf = result.get("confidence", "none")
+    # Override rules (M2.6.1):
+    #   - default: high conf + intent != "other" → override
+    #   - curated intent bypass: curated 的短语是我们手填的，模板库不会有
+    #     这些客户的痛点措辞 → medium conf + intent 在 curated 集合里 → 也允许 override
+    if top is None or top.get("intent") == "other":
+        should_override = False
+    elif conf == _KEYWORD_OVERRIDE_MIN_CONF:
+        should_override = True
+    elif (
+        conf == "medium"
+        and top.get("intent") in _KEYWORD_OVERRIDE_CURATED_INTENTS
+    ):
+        should_override = True
+    else:
+        should_override = False
+    return {
+        "kw_top":          top,
+        "kw_conf":         conf,
+        "kw_candidates":   result.get("candidates", []),
+        "should_override": should_override,
+        "override_intent": top["intent"] if should_override else None,
+    }
 
 
 # M1 历史常量：仅 NA 放行；保留供 M2_ROLLBACK_TO_M1 应急回退使用。
@@ -114,23 +197,22 @@ def region_gate_should_escalate(
     email_body: str | None = None,
     bypass_env: str = "M1_BYPASS_REGION_GATE",
     rollback_env: str = "M2_ROLLBACK_TO_M1",
+    enforce_region_env: str = "M2_ENFORCE_REGION_GATE",
 ) -> bool:
-    """M2 region gate 共享判断：返回 True 表示需要升人工。
+    """Region gate 共享判断：返回 True 表示需要升人工。
 
-    两阶段：
+    默认（2026-09-17 拍板「模版区域限制全部打开」）：
       阶段 1（硬敏感词）：red_flags 命中或 body 命中法规请求关键词
         → 任意 region 都升人工。
-      阶段 2（region 路由）：triage.region ∈ SUPPORTED_REGIONS_M2
-        → 放行；其它 → 升人工。
+      阶段 2（按大区拦）：关闭。中东 / 亚洲 / 拉美 / 非洲与四区一样可走自动草稿。
+        M2_ENFORCE_REGION_GATE 不再恢复四区拦。
 
-    UK 识别复用 prompts._resolve_region_key()：region="Europe" + country 是 UK
-    别名 → 当作 "United Kingdom"。
-
-    bypass_env（M1_BYPASS_REGION_GATE=1）仅 eval 用：跳阶段 2 region 校验。
-    rollback_env（M2_ROLLBACK_TO_M1=1）回退到 M1 行为：仅 NA 放行。
+    应急开关：
+      rollback_env（M2_ROLLBACK_TO_M1=1）→ 仅 NA 放行。
+      bypass_env（M1_BYPASS_REGION_GATE=1）→ 兼容旧 eval；阶段 2 已关时无效果。
 
     唯一出口策略，被 email_agent.py 主循环与 outlook_drafts.py should_skip
-    共用，确保两条路径对 region 的判定保持一致。改守门逻辑只改这里。
+    共用。改守门逻辑只改这里。
     """
     # 阶段 1: 硬敏感词
     if triage.red_flags and any(rf in _HARD_ESCALATION_RED_FLAGS for rf in triage.red_flags):
@@ -140,21 +222,14 @@ def region_gate_should_escalate(
             if pat.search(email_body):
                 return True
 
-    # 应急回滚：M2 出 bug 时一键回 M1
+    # 应急回滚：仅 NA 放行
     if os.environ.get(rollback_env):
         return triage.region not in SUPPORTED_REGIONS_M1
 
-    # 阶段 2: region 路由（UK 通过 _resolve_region_key 识别）
-    region_key = _resolve_region_key(triage.region, triage.country)
-    if region_key in SUPPORTED_REGIONS_M2:
-        return False
-    if os.environ.get(bypass_env):
-        LOG.warning(
-            "region gate BYPASSED via %s; region=%s → continuing full pipeline (eval only)",
-            bypass_env, triage.region,
-        )
-        return False
-    return True
+    # 全区可走自动草稿。REG-001 仅在客户明确说不支持时命中，且为 no_auto_reply。
+    # enforce_region_env 已废弃。
+    _ = (bypass_env, enforce_region_env)
+    return False
 
 
 # gpt-5 推理模式 + strict json_schema 下，为 drafting / compliance
@@ -195,11 +270,20 @@ class EmailAgent:
         crm: Optional[MockCustomerCRM] = None,
         rag: Optional[MockKnowledgeBase] = None,
         max_rewrite_attempts: int = 2,
+        *,
+        use_keyword_hybrid: bool = False,
+        kw_index: Optional[dict] = None,
+        kw_curated: Optional[dict] = None,
     ) -> None:
         self.llm = llm or AzureLLMClient()
         self.crm = crm or MockCustomerCRM()
         self.rag = rag or MockKnowledgeBase()
         self.max_rewrite_attempts = max_rewrite_attempts
+        # M2.6: keyword 先判 intent + 高分覆盖 LLM
+        self.use_keyword_hybrid = use_keyword_hybrid
+        if use_keyword_hybrid:
+            self._kw_index = kw_index if kw_index is not None else load_keyword_resources()[0]
+            self._kw_curated = kw_curated if kw_curated is not None else load_keyword_resources()[1]
 
     # ── 对外接口 ───────────────────────────────────────────────────
 
@@ -212,6 +296,7 @@ class EmailAgent:
         """端到端跑一封客户邮件。失败时抛 NeedsHumanEscalation。"""
         t0 = time.time()
         audit_calls: list[dict] = []
+        kw_override_info: dict = {}
 
         # 1) Triage ─────────────────────────────────────────────
         triage, c = self.llm.invoke_json(
@@ -225,6 +310,36 @@ class EmailAgent:
         )
         audit_calls.append(_as_audit(c))
 
+        from .region_catalog import apply_to_triage
+        triage = apply_to_triage(triage, email_body)
+
+        # M2.6 hybrid: keyword 后判，高分覆盖 LLM 的 intent
+        if self.use_keyword_hybrid:
+            kw_res = classify_intent(
+                email_body, "",
+                kw_index=self._kw_index, curated=self._kw_curated,
+            )
+            kw_override_info = {
+                "kw_top":           kw_res["kw_top"],
+                "kw_conf":          kw_res["kw_conf"],
+                "kw_should_override": kw_res["should_override"],
+                "kw_overridden":    False,
+                "kw_override_intent": None,
+            }
+            if (
+                kw_res["should_override"]
+                and triage.intent != kw_res["override_intent"]
+            ):
+                prev_intent = triage.intent
+                triage.intent = kw_res["override_intent"]
+                kw_override_info["kw_overridden"]      = True
+                kw_override_info["kw_override_intent"] = kw_res["override_intent"]
+                kw_override_info["kw_prev_intent"]     = prev_intent
+                LOG.info(
+                    "hybrid override: kw=%s (conf=%s) overrode llm=%s",
+                    kw_res["override_intent"], kw_res["kw_conf"], prev_intent,
+                )
+
         # 红牌一步升人工
         if triage.red_flags:
             raise NeedsHumanEscalation(
@@ -233,13 +348,29 @@ class EmailAgent:
             )
 
         # region gate — 共享逻辑见 region_gate_should_escalate()，outlook_drafts.py 共用。
-        # M2 两阶段：阶段 1 硬敏感词（红牌 / GDPR 数据请求等）任 region 都升人工；
-        # 阶段 2 按 SUPPORTED_REGIONS_M2 路由，NA/EU/UK/Oceania 走自动流水线，
-        # 其它 region（Asia/South America/Africa）暂仍升人工。
+        # 只拦阶段 1 硬敏感词；不按大区升人工。
         if region_gate_should_escalate(triage, email_body=email_body):
             region_key = _resolve_region_key(triage.region, triage.country)
             raise NeedsHumanEscalation(
                 f"region {triage.region} (resolved={region_key}) → human regional team",
+                partial={"triage": triage.model_dump()},
+            )
+
+        if ismart_plan_or_3g_needs_human(email_body):
+            raise NeedsHumanEscalation(
+                "3G / iSMART data plan (retired template) → human",
+                partial={"triage": triage.model_dump()},
+            )
+
+        if fraud_force_unbind_needs_human(email_body):
+            raise NeedsHumanEscalation(
+                "fraud/unauthorized force-unbind → human",
+                partial={"triage": triage.model_dump()},
+            )
+
+        if europe_service_subscription_needs_human(email_body):
+            raise NeedsHumanEscalation(
+                "Europe iSMART/connected service subscription → human",
                 partial={"triage": triage.model_dump()},
             )
 
@@ -297,7 +428,15 @@ class EmailAgent:
 
         # M2.5.1: 取模板自带的「禁止/注意表述」（xlsx 第 11 列）。
         # 模板加载复用 template_reply.load_xlsx()——同一份 xlsx，避免 schema 分叉。
-        template_forbidden = self._load_template_forbidden(triage.intent)
+        # M2.7: 同时取 template_body，用于 LLM drafting 阶段处理
+        # 【xxx】 inline 占位符（按 case 动态填充）。
+        template_meta = self._load_template_meta(triage.intent, email_body=email_body)
+        template_forbidden = template_meta["forbidden"]
+        template_body = template_meta["body"]
+        if template_meta.get("level"):
+            triage.auto_reply_level = template_meta["level"]  # type: ignore[assignment]
+        if template_meta.get("intent") and template_meta["intent"] != triage.intent:
+            triage.intent = template_meta["intent"]  # type: ignore[assignment]
 
         while True:
             # 草稿
@@ -311,6 +450,7 @@ class EmailAgent:
                     if compliance is not None else None
                 ),
                 template_forbidden=template_forbidden,
+                template_body=template_body,
             )
             audit_calls.append(_as_audit(c))
 
@@ -360,6 +500,7 @@ class EmailAgent:
                 "rewrite_attempts": rewrite_attempts,
                 "latency_ms": elapsed,
                 "template_forbidden": template_forbidden,   # M2.5.1: 哪条禁则原文进了 prompt
+                **({"kw_hybrid": kw_override_info} if kw_override_info else {}),
             },
         )
 
@@ -369,15 +510,30 @@ class EmailAgent:
         """M2.5.1: 按 intent 挑第一条匹配模板的 xlsx「禁止/注意表述」原文。
         模板库懒加载（首次调用才读 xlsx；后续命中缓存）。
         返回 None 表示该 intent 无模板 / 模板无禁则。
+
+        M2.7: 改为 _load_template_meta() 的薄包装，向后兼容。
         """
+        return self._load_template_meta(intent)["forbidden"]
+
+    def _load_template_meta(self, intent: str, email_body: str = "") -> dict:
+        """按邮件正文 + intent 挑知识库行（与 Outlook 快路径同一套 pick_template）。"""
         if not hasattr(self, "_templates_cache"):
             self._templates_cache = _load_xlsx_templates()  # type: ignore[attr-defined]
-        for t in self._templates_cache:  # type: ignore[attr-defined]
-            if t.get("intent") == intent:
-                f = (t.get("forbidden") or "").strip()
-                if f:
-                    return f
-        return None
+        templates = self._templates_cache  # type: ignore[attr-defined]
+        row = _pick_template(intent, templates, body_text=email_body) if templates else None
+        if not row:
+            return {
+                "forbidden": None, "body": None, "template_id": None,
+                "scenario": None, "level": None, "intent": None,
+            }
+        return {
+            "forbidden":    (row.get("forbidden") or "").strip() or None,
+            "body":         row.get("template") or None,
+            "template_id":  row.get("template_id") or None,
+            "scenario":     row.get("scenario") or None,
+            "level":        row.get("level") or None,
+            "intent":       row.get("intent") or None,
+        }
 
     def _build_context(
         self,
@@ -447,6 +603,7 @@ class EmailAgent:
         retrieval: RetrievalResult,
         user_feedback: list[str] | None,
         template_forbidden: str | None = None,   # M2.5.1: xlsx 第 11 列「禁止/注意表述」
+        template_body: str | None = None,        # M2.7: 模板正文（含【xxx】时用于 LLM 动态填充）
     ) -> tuple[DraftReply, LLMCall]:
         payload: dict = {
             "email":         email_body,
@@ -458,6 +615,10 @@ class EmailAgent:
         if template_forbidden:
             # 把模板自带的禁则原文喂给 LLM；与 FORBIDDEN_PHRASINGS（F1-F8）互补
             payload["template_forbidden"] = template_forbidden
+        # M2.7: 仅在含【】内 inline placeholder 时才喂模板正文给 LLM。
+        # 没有时 LLM 直接基于 triage + retrieval 重写即可，避免模板 body 干扰。
+        if template_body and "【" in template_body:
+            payload["template_body"] = template_body
         prompt = json.dumps(payload, ensure_ascii=False, default=str)
         return self._call_with_degrade(
             schema=DraftReply,

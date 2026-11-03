@@ -163,6 +163,18 @@ def test_personalize_leaves_default_when_no_name():
     assert personalize_greeting(body, "customer@example.com") == body
 
 
+def test_personalize_email_as_display_name_not_mr_ms():
+    """Graph 显示名经常是邮箱本身，不能写成 Dear Mr./Ms. tcharles@sky.com。"""
+    from agent.greeting import personalize_greeting
+    body = "{{salutation}},\n\nThank you for your email."
+    out = personalize_greeting(
+        body, "tcharles@sky.com",
+        display_name="tcharles@sky.com",
+    )
+    assert out.startswith("Dear customer,"), out
+    assert "@" not in out.split("\n", 1)[0]
+
+
 def test_personalize_leaves_alone_when_no_default_greeting():
     """草稿不以 "Dear customer" 开头时，不强行插入称谓。"""
     from agent.greeting import personalize_greeting

@@ -22,8 +22,11 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(ROOT))
 
 from agent.outlook_drafts import (
+    Mail,
     MailboxRouter,
     build_router_from_env,
+    misdirected_junk_skip_reason,
+    system_notification_skip_reason,
 )
 
 
@@ -179,10 +182,19 @@ def test_find_already_replied_to_empty_body():
 
 
 def test_find_already_replied_to_no_self_mailboxes():
-    """没配自家 mailbox → 永远不命中（防御性）。"""
+    """MAILBOX_* 全空仍识别固定 customer.care 引用（MAILBOX_USER 常是 GUID）。"""
     r = MailboxRouter()  # 全空
     body = "On Mon, Customer Care <customer.care@ismart-service.com> wrote:\n> ..."
-    assert r.find_already_replied_to(body) is None
+    assert r.find_already_replied_to(body) == "customer.care@ismart-service.com"
+
+
+def test_find_already_replied_to_greek_egrapse():
+    r = MailboxRouter()
+    body = (
+        "Στις Κυρ 24 Αυγ 2025, customer.care@ismart-service.com έγραψε:\n"
+        "> Please send a screenshot"
+    )
+    assert r.find_already_replied_to(body) == "customer.care@ismart-service.com"
 
 
 def test_user_upn_added_to_self_mailboxes():
@@ -266,6 +278,87 @@ def _run_mock_with_router(mock_mails: list[dict],
         cwd=str(ROOT), stderr=subprocess.STDOUT, env=full_env,
     )
     return json.loads(out_path.read_text())
+
+
+def _mail(**kwargs) -> Mail:
+    defaults = dict(
+        id="m1", subject="hello", sender="a@b.com",
+        received_at="", body_text="x", is_read=False,
+    )
+    defaults.update(kwargs)
+    return Mail(**defaults)
+
+
+def test_skip_office365_recall_sender():
+    m = _mail(
+        sender="Office365Reports@microsoft.com",
+        subject='邮件“回复: Issues with Vehicle or iSmart App”的邮件撤回报告',
+    )
+    assert system_notification_skip_reason(m)
+    assert not system_notification_skip_reason(
+        _mail(sender="rohanovich@live.co.uk", subject="Issues with Vehicle or iSmart App")
+    )
+
+
+def test_skip_recall_subject_even_if_sender_unknown():
+    m = _mail(sender="unknown@example.com", subject="RE: Message Recall Report")
+    assert system_notification_skip_reason(m) == "recall_or_dsn_report"
+    assert not system_notification_skip_reason(
+        _mail(sender="owner@gmail.com", subject="Is my MG under recall?")
+    )
+
+
+def test_bank_legalization_forward_is_junk():
+    body = (
+        "--------- Forwarded message ---------\n"
+        "By: Legalizations Ops <legalizationsops@example.gr>\n"
+        "Subject: Company Legalization: EXAMPLE IKE - VAT: 000000000\n"
+        "Good morning,\n"
+        "Bank's updated Legalization Bulletin for the company EXAMPLE IKE "
+        "with expiration on 14/10/2026. We have made a temporary deactivate "
+        "your myAlpha Web for Business subscription. Please submit a recent "
+        "General Certificate of G.E.MI. and the Articles of Association.\n"
+    )
+    m = _mail(
+        sender="someone@gmail.com",
+        subject="Fwd: Company Legalization: EXAMPLE IKE",
+        body_text=body,
+    )
+    assert misdirected_junk_skip_reason(m) == "misdirected_bank_legalization"
+    car = _mail(
+        sender="owner@gmail.com",
+        subject="iSMART app",
+        body_text="The iSMART app will not bind. VIN LSJWX4092TN000001.",
+    )
+    assert misdirected_junk_skip_reason(car) is None
+    mixed = _mail(
+        sender="owner@gmail.com",
+        subject="Fwd: legalization",
+        body_text=body + "\nAlso my MG ZS will not bind in iSMART.\n",
+    )
+    assert misdirected_junk_skip_reason(mixed) is None
+
+
+def test_partnership_marketing_autoreply_is_junk():
+    body = (
+        "Thank you for reaching out!\n"
+        "We are excited to explore collaboration. "
+        "evaluating the Enode partnership opportunity.\n"
+        "The Enode Partnership Team\n"
+        "Unsubscribe Manage preferences\n"
+    )
+    m = _mail(
+        sender="morten@enode.io",
+        subject="Thanks for Reaching Out! We'll Connect Soon!",
+        body_text=body,
+    )
+    assert misdirected_junk_skip_reason(m) == "marketing_partnership_autoreply"
+    real = _mail(
+        sender="owner@gmail.com",
+        subject="Thanks for reaching out",
+        body_text="The iSMART app stays in update mode and will not lock the MG ZS.",
+    )
+    assert misdirected_junk_skip_reason(real) is None
 
 
 def test_integration_self_mail_skipped_without_llm_call():
@@ -365,8 +458,13 @@ TESTS = [
     ("B+2 写道: Chinese reply quote detected",     test_find_already_replied_to_chinese_xiedao),
     ("B+3 plain email mention not detected",      test_find_already_replied_to_no_quote),
     ("B+4 empty body safe",                        test_find_already_replied_to_empty_body),
-    ("B+5 no self mailboxes = no detection",       test_find_already_replied_to_no_self_mailboxes),
+    ("B+5 empty env still detects customer.care",  test_find_already_replied_to_no_self_mailboxes),
+    ("B+6 Greek έγραψε quote detected",            test_find_already_replied_to_greek_egrapse),
     ("B+6 user_upn falls into self_mailboxes",     test_user_upn_added_to_self_mailboxes),
+    ("B+7 skip Office365 recall sender",           test_skip_office365_recall_sender),
+    ("B+8 skip recall subject not vehicle recall", test_skip_recall_subject_even_if_sender_unknown),
+    ("B+9 bank legalization forward is junk",      test_bank_legalization_forward_is_junk),
+    ("B+10 partnership marketing autoreply is junk", test_partnership_marketing_autoreply_is_junk),
     # Part C
     ("C1 build_router_from_env reads all",        test_build_router_from_env_reads_all),
     ("C2 build_router_from_env missing safe",     test_build_router_from_env_with_missing_vars),

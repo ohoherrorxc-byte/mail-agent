@@ -7,7 +7,8 @@
 
 M1 阶段只覆盖 NA 英语 + 保修查询单意图。
 M2 (2026-07-27)：解锁 EU / United Kingdom / Oceania 三区合规规则（GDPR / UK GDPR / AU/NZ Privacy Act）。
-LATAM / MEA / APAC 仍是 placeholder（这些 region 仍 escalate，不调 picker）。
+LATAM / MEA / APAC 仍是 placeholder 条文；区域闸默认关闭后仍会调 picker，
+未接合规区回落到 NA 硬规则 + 占位 ROLE，禁止编造当地法条编号。
 """
 
 from __future__ import annotations
@@ -187,8 +188,8 @@ ROLE_AND_LAWS_BY_REGION: dict[str, str] = {
     "Europe":         ROLE_AND_LAWS_EU,
     "United Kingdom": ROLE_AND_LAWS_UK,
     "Oceania":        ROLE_AND_LAWS_OC,
-    # LATAM / MEA / APAC 占位；这些 region 仍 escalate，picker 不会被调用
     "South America":  ROLE_AND_LAWS_LATAM,
+    "Middle East":    ROLE_AND_LAWS_MEA,
     "Asia":           ROLE_AND_LAWS_APAC,
     "Africa":         ROLE_AND_LAWS_MEA,
 }
@@ -199,6 +200,7 @@ COMPLIANCE_CONSTRAINTS_BY_REGION: dict[str, str] = {
     "United Kingdom": COMPLIANCE_CONSTRAINTS_UK,
     "Oceania":        COMPLIANCE_CONSTRAINTS_OC,
     "South America":  COMPLIANCE_CONSTRAINTS_LATAM,
+    "Middle East":    COMPLIANCE_CONSTRAINTS_MEA,
     "Asia":           COMPLIANCE_CONSTRAINTS_APAC,
     "Africa":         COMPLIANCE_CONSTRAINTS_MEA,
 }
@@ -230,24 +232,37 @@ def _resolve_region_key(region: str, country: str | None) -> str:
     return region
 
 
+_UNSUPPORTED_REGION_CONSTRAINT_FOOTER = """
+Unsupported-region overlay (local statute pack not loaded):
+- Follow the NA hard rules above (no invented parts/dates, no refund
+  promises, no echoed PII, no numbered SLA in customer-facing copy).
+- Do NOT invent local statute numbers, DPO addresses, or deletion
+  deadlines for this market.
+- Do NOT quote GDPR / UK GDPR / AU Privacy Act as if they apply, unless
+  the customer themselves invoked that regime.
+"""
+
+
 def pick_compliance_constraints(
     region: str,
     country: str | None = None,
 ) -> tuple[str, str]:
     """按 region 选 (role, constraints)。
 
-    M2 调用方应先用 region_gate_should_escalate() 走细路由；
-    只有 region ∈ SUPPORTED_REGIONS_M2 时才会调用本函数。
-    其它 region 进到这里会 raise。
+    NA / EU / UK / Oceania 用已接合规套。
+    其它大区（中东 / 亚洲 / 拉美 / 非洲）用占位 ROLE + NA 硬规则，
+    禁止编造当地法条。未知 region 回落 NA。
     """
     key = _resolve_region_key(region, country)
-    if key not in SUPPORTED_REGIONS_M2:
-        raise ValueError(
-            f"region {region!r} (country={country!r}) not in M2 picker; "
-            f"should have been escalated before reaching here. "
-            f"Supported: {sorted(SUPPORTED_REGIONS_M2)}"
-        )
-    return ROLE_AND_LAWS_BY_REGION[key], COMPLIANCE_CONSTRAINTS_BY_REGION[key]
+    role = ROLE_AND_LAWS_BY_REGION.get(key, ROLE_AND_LAWS_NA)
+    if key in SUPPORTED_REGIONS_M2:
+        return role, COMPLIANCE_CONSTRAINTS_BY_REGION[key]
+    constraints = (
+        COMPLIANCE_CONSTRAINTS_NA.rstrip()
+        + "\n"
+        + _UNSUPPORTED_REGION_CONSTRAINT_FOOTER
+    )
+    return role, constraints
 
 
 # ── 3.2 意图分类 ─────────────────────────────────────────────────────────
@@ -259,8 +274,9 @@ TRIAGE_SYSTEM = f"""{ROLE_AND_LAWS_NA}
 Task: classify ONE inbound customer email and emit a single JSON object.
 
 Fields you must populate:
-- intent: one of the 32 iSmart after-sales intents below.  Pick the SINGLE
-  best match.  Source taxonomy: iSMART售后服务邮箱回复方法_20260308.xlsx.
+- intent: one of the 38 iSmart after-sales intents below.  Pick the SINGLE
+  best match.  Source taxonomy: iSMART售后服务邮箱回复方法_20260308.xlsx (32 base)
+  + iSMART自动回复知识库_全量模板_20260729.xlsx (6 new sub-categories).
     App-side (vehicle / account / binding):
       "app_vehicle_control"     — App shows stale data, error 47/59, vehicle
                                   not responding to App commands
@@ -277,8 +293,9 @@ Fields you must populate:
       "ismart_remote_control"   — remote AC / window / charging power questions
       "ismart_digital_key"      — Digital Key / Keyless Start — fault or how-to
       "ismart_fota"             — FOTA / OTA availability, "will X be supported"
-      "ismart_connectivity"     — wireless CarPlay/Android Auto, EV Trip Planner,
-                                  E-call, area-code coverage
+      "ismart_connectivity"     — T-Box / 4G online services / e-call / hotspot /
+                                  EV Trip Planner / area-code coverage
+                                  (NOT CarPlay/Android Auto — that is ficm_cpaa)
       "ismart_account_inquiry"  — main vs secondary account, password reset how-to,
                                   PIN / security code, secondary account creation
       "ismart_owner_change"     — sold car / new owner handover
@@ -286,13 +303,30 @@ Fields you must populate:
       "ismart_privacy"          — declined privacy agreement → core features off
       "ismart_user_manual"      — cannot locate digital owner's manual
       "ismart_feature_inquiry"  — OTHER feature consultations not covered above
+      "ismart_translation"      — UI text / email body translation error (e.g.
+                                  "screen still shows Chinese", "the translation
+                                  is wrong"); M2.5 added
+      "ismart_music_streaming"  — Amazon Music / Spotify / online music
+                                  playback issues in car; M2.5 added
     FICM (in-vehicle infotainment):
       "ficm_activation"         — unclear or missing activation guidance
-      "ficm_cpaa"               — unstable CarPlay / Android Auto
+      "ficm_cpaa"               — CarPlay / Android Auto connection or pairing
+                                  is unstable or fails. Mentioning CarPlay/AA
+                                  while asking if a software update exists is
+                                  NOT this intent (use app_update / ismart_fota).
       "ficm_map"                — map upgrade failure / not available
+      "ficm_bluetooth"          — Bluetooth hands-free call / microphone / cannot
+                                  hear the other party; M2.5 added
+      "ficm_voice"              — Hello MG / voice assistant / voice language
+                                  issues; M2.5 added
+      "ficm_radio"              — DAB / RDS / radio station logo / freezes;
+                                  M2.5 added
     TSP:
       "tsp_sensitive_data"      — GPS / real-time location / vehicle password
-                                  disclosure requests
+                                  DISCLOSURE requests (customer wants their data)
+      "tsp_data_missing"        — customer CANNOT see their vehicle data in App
+                                  (opposite intent: data not flowing);
+                                  M2.5 added
     ADAS (safety-related → default P1):
       "adas_acc", "adas_aeb", "adas_lka", "adas_tja"
     Hardware / non-iSMART:
@@ -308,23 +342,58 @@ Fields you must populate:
                                   do NOT use for general "annoyed tone"
       "follow_up_resolved"      — "did my issue get fixed" / closed / resolved
       "other"                   — fallback when truly none of the above fits
+- sub_intent: M2.5 引入；67 个二级问题分类（from iSMART自动回复知识库_
+  全量模板_20260729.xlsx 的二级问题分类列）。drafter 据此选模板段落，
+  比 intent 粒度更细。同一封邮件可能命中多个，但只输出**主** sub_intent
+  （max-score）。fallback 用 "sub_intent_unknown"。
+  完整 67 值见 agent/schemas.py:SubIntent Literal；常见子集：
+    "app_vehicle_control_status" — App 显示 stale / 47 error
+    "app_charging_schedule"      — 预约充电不执行
+    "app_charging_mode_not_saved"— 充电模式不记忆
+    "app_guide_manual"           — 绑车引导
+    "app_energy_stats"           — 能耗统计异常
+    "app_vehicle_image"          — 车体图错误
+    "ficm_bluetooth"             — 蓝牙通话 / 麦克风
+    "ficm_voice"                 — 语音助手
+    "ficm_radio"                 — DAB / RDS
+    "ficm_music"                 — 在线音乐
+    "ficm_volume"                — 音量 / 静音
+    "ficm_ui_complexity"         — UI 显示 / 中文残留
+    "ficm_auto_reboot"           — 自动重启 / 黑屏
+    "ficm_driving_mode_not_saved"— MG Pilot / 自定义模式不记忆
+    "ficm_network"               — 4G / Online service
+    "ismart_translation"         — UI / 邮件翻译错误
+    "ismart_privacy"             — 拒绝隐私协议
+    "general_request_vin"        — 客户未提供 VIN
+    "general_vin_incorrect"      — VIN 错
+    "general_request_screenshot_video" — 需要视频/截图
+    "general_backend_analyzing"  — 后台分析中
+    "close_resolved"             — 已解决 / 致谢
+    "close_invalid"              — 无效邮件
+    "feat_request_*"             — 新功能建议（15 个独立 sub_intent）
 - urgency: one of ["P0","P1","P2","P3"].  P0 = lawyer letter, safety incident,
   media CC.  P1 = active safety / out-of-warranty but high-value claim /
   any ADAS complaint.
   P2 = standard warranty / service question.  P3 = parts info / general.
-- region: iSmart sells in 6 regions. Pick ONE from the customer's country in
-  the email body:
+- region: 以《国家清单-大区分类对照表》为准。Pick ONE from the customer's
+  country in the email body (web-form Country/Region field wins):
     "Europe"        → UK / France / Germany / Italy / Spain / Portugal / Greece /
                       Cyprus / Sweden / Denmark / Norway / Ireland / Poland /
-                      Turkey / Israel / 其他欧洲国家
-    "Asia"          → GCC (沙特/阿联酋/卡塔尔/巴林/阿曼/科威特) / India /
-                      Pakistan / Philippines / Vietnam / Thailand / Indonesia /
-                      Malaysia / Singapore / Russia / Kazakhstan / 其他亚洲
+                      Turkey / Russia / Belarus / Reunion / 其他对照表欧洲国家。
+                      不含 Israel。
+    "Middle East"   → Saudi Arabia / UAE / Qatar / Kuwait / Oman / Bahrain /
+                      Lebanon / Iraq / Jordan / Palestine / Israel
+    "Asia"          → India / Pakistan / Thailand / Indonesia / Malaysia /
+                      Philippines / Vietnam / Singapore / Cambodia / Laos /
+                      Myanmar / Brunei / Timor-Leste / Bangladesh / Sri Lanka /
+                      Nepal / Bhutan / Hong Kong / Macau / Mongolia /
+                      Azerbaijan / Tajikistan / Georgia。不含 GCC / Russia / Israel。
     "South America" → Mexico / Brazil / Argentina / Chile / Jamaica /
-                      Trinidad & Tobago / 其他拉美
-    "Africa"        → Egypt / South Africa / Nigeria / 其他非洲（不含 GCC）
-    "Oceania"       → Australia / New Zealand
-    "North America" → US / Canada
+                      Trinidad & Tobago / Caribbean / 其他对照表美洲国家。不含 US/Canada。
+    "Africa"        → Egypt / South Africa / Nigeria / 其他对照表非洲国家（不含 GCC）
+    "Oceania"       → Australia / New Zealand / Fiji / Samoa / French Polynesia /
+                      New Caledonia / Tahiti
+    "North America" → US / Canada only
                       （M2 已解锁 NA 走 full pipeline；不要因为"iSmart 不卖 NA"
                        就过度保守把 auto_reply_level 全标 no_auto_reply。
                        NA 邮件按 intent + red_flag + urgency 正常决策 5 档分级；
@@ -343,7 +412,7 @@ Fields you must populate:
 - auto_reply_level: M2.5 知识库 (iSMART自动回复知识库_全量模板_20260729.xlsx) 引入的
   5 档自动回复分级。决定 LLM 流水线后续步骤：**auto_draft_safe** /
   **auto_draft_needs_info** / **auto_draft_and_close** → createReply 落草稿（人工 review
-  后点 Send）；**auto_draft_review** → 同样落草稿但标题加 `[REVIEW]` 前缀让人工优先看；
+  后点 Send）；**auto_draft_review** → 同样落草稿，标题不加 `[REVIEW]`；
   **no_auto_reply** → 走 NeedsHumanEscalation 升人工（不落任何草稿）。
   默认 **auto_draft_safe**。
   决策规则（与 intent + region + 内容综合判断，不是只看 intent）：
@@ -355,13 +424,13 @@ Fields you must populate:
     auto_draft_review        — 模板能答但涉及合规 / 法规 / 保修判断 / 跨 region /
                                内容敏感（如 iSMART-功能咨询模糊 / 新需求-OTA /
                                非iSMART-IPK灯亮 / 后台分析中等待结论）。落草稿
-                               时标题加 [REVIEW]，人工 review 优先级最高。
+                               落草稿，标题不加 [REVIEW]。
     no_auto_reply            — 不能落草稿：
                                  (a) red_flags 非空 → 一律 no_auto_reply
-                                 (b) region 不在 M2 支持区（NA/EU/UK/Oceania）
-                                     → no_auto_reply（升人工由 region gate 触发，
-                                     但 auto_reply_level 仍要标 no_auto_reply
-                                     让 outlook_drafts 不要尝试落草稿）
+                                 (b) 不要因客户大区（中东/亚洲/拉美/非洲）标
+                                     no_auto_reply。仅当客户明确说本区不支持、
+                                     且命中 REG-001 时保持知识库「不可自动回复」
+                                     （人工确认；绑不上车在确认前按绑车要信息）。
                                  (c) 模板自带"需要接入 TCMP / 人工强制解绑 /
                                      人工确认 VIN 绑定时间"等条件
                                      （如 IPK相关 / 后台分析中 / 强制解绑场景）
@@ -403,6 +472,58 @@ red_flag decision rules (use these strictly):
   "scratched in parking lot") is NOT a safety_incident — it is a
   complaint.  Even serious-sounding past events are not safety_incident
   unless the *customer is currently at risk*.
+
+Intent tie-breakers (use these when two labels look plausible):
+- Do not use ismart_region_support. Country/Region on the web form, the
+  country name, grey import, or "not supported in this market" must not
+  change the intent. Classify the vehicle/App symptom only (login, bind,
+  remote control, connectivity, and so on).
+- ismart_connectivity vs ficm_cpaa vs app_vehicle_control vs app_binding:
+  ficm_cpaa = CarPlay / Android Auto on the head unit fails to connect,
+  drops, or needs re-pairing;
+  asking whether CarPlay / Android Auto / infotainment has a software
+  update is app_update or ismart_fota, not ficm_cpaa;
+  app_vehicle_control = already bound, remote command / status / "vehicle
+  not responded" / security-verification-on-command fails;
+  app_binding = QR / add vehicle / previous-owner unbind / 72-hour force
+  unbind;
+  ismart_connectivity = T-Box / 4G / online services / e-call / hotspot /
+  EV Trip Planner / "app will not detect the car" when it is not a QR-bind
+  flow.  Stolen-car location requests are tsp_sensitive_data, not
+  connectivity.
+- ismart_owner_change vs app_binding: owner_change = seller/dealer
+  handover ("new owner", sold the car, dealer→customer owner transfer,
+  returning a company car and asking to delete the account).
+  Used-car buyer who cannot bind because the previous account is still
+  attached = app_binding.
+- app_account vs ismart_account_inquiry vs app_binding:
+  app_account = login / session kicked / password reset *failed* / "logged
+  in on another device" / account field will not accept the full email;
+  ismart_account_inquiry = how-to (secondary account, where is PIN, change
+  login email, delete-account steps) when they are not mid QR-bind;
+  PIN asked *during* QR bind remains app_binding.
+  "the app no longer connects" without QR / T-Box / 4G is app_account, not
+  ismart_connectivity.
+- Classify the LATEST customer turn. Quoted CS history is context only.
+  follow_up_resolved ONLY if the latest turn is thanks / "is it fixed" /
+  "any update on my case?" / sending the VIN, password, or photos that were
+  requested, with no new symptom.
+  A new question in a Re: thread (navigation, charging, PIN, unbind) takes
+  that new intent — not follow_up_resolved.
+- close_invalid = recall/undo-send reports, empty screenshot-only mails,
+  CS auto-ack templates ("Ihre Anfrage ist bei uns eingegangen"), and
+  misdirected bank/company legalization (Legalization Bulletin, G.E.MI.,
+  myAlpha Web) with no vehicle/App ask — not "other".
+- ismart_feature_inquiry is ONLY the residual how-to that does not fit a
+  more specific intent.  Examples of NOT feature_inquiry:
+  80% charge limit → charging; wired/wireless Android Auto or CarPlay →
+  ficm_cpaa UNLESS the central / infotainment screen itself turns off,
+  goes black/blank, or reboots (then ismart_feature_inquiry / FICM-003,
+  even if AA or Maps also die); "My Manual" / no data for the handbook →
+  ismart_user_manual;
+  hill power loss / TPMS hardware / dealer warranty → hardware_warranty;
+  PIN asked during QR bind → app_binding.
+  Ignore the Privacy Notice footer on every web form; it is not an intent.
 
 intent-vs-urgency guidance:
 - intent ∈ {{"adas_acc","adas_aeb","adas_lka","adas_tja"}}  →  default urgency P1
@@ -523,11 +644,44 @@ def check_forbidden_phrasings(body: str) -> list[str]:
     return hits
 
 
+# M2.7: 【xxx】inline placeholder 填充规则
+# iSMART 自动回复模板里常用 【...】 占位符，e.g.
+#   "Please see 【the screenshot you attached】 for the correct procedure."
+#   "We have forwarded 【the issue you described】 to our engineering team."
+# 这些占位符**不是结构化字段**（如 {customer_email}），所以不会被
+# fill_placeholders_naive() 自动替换 —— 必须由 LLM 在草稿时按真实场景动态填写。
+# 当 payload 含 `template_body` 字段时，下面规则生效。
+INLINE_PLACEHOLDER_RULE = """\
+Inline 【...】 placeholders (M2.7):
+- When the user message contains a `template_body`, that template body may
+  include inline placeholders written as 【something descriptive】, e.g.
+  【the screenshot you attached】, 【the issue you described】,
+  【the incorrect data you showed】, 【the date you mentioned】.
+- Treat each 【...】 as a *slot to fill with content derived from the
+  actual customer case* (their email body, retrieved evidence, triage
+  result). Do NOT leave the placeholder verbatim. Do NOT replace it with
+  generic filler like "[details]" or "your message".
+- Example substitutions (illustrative, not exhaustive):
+    【the screenshot you attached】 → "the screenshot you sent"
+    【the issue you described】     → "the app binding failure you reported"
+    【the incorrect data】          → "the trip log showing 2024-03-15 instead of 2024-03-14"
+    【the date you mentioned】      → "March 12"
+- If you genuinely cannot determine the referent from the customer's email
+  AND no retrieval evidence clarifies it, *omit the sentence containing
+  the 【...】* rather than ship a placeholder residue. A missing sentence
+  is always safer than a leaky placeholder in customer-facing mail.
+- After drafting, scan the body for any leftover 【...】 or {{...}} and
+  resolve or remove them before emitting JSON.
+"""
+
+
 DRAFTING_SYSTEM = f"""{ROLE_AND_LAWS_NA}
 
 {COMPLIANCE_CONSTRAINTS}
 
 {FORBIDDEN_PHRASINGS}
+
+{INLINE_PLACEHOLDER_RULE}
 
 Task: draft a customer-facing reply email based on the triage result,
 customer context, and retrieved evidence (all in the user message).
@@ -620,10 +774,13 @@ original email, the proposed draft, AND the compliance review. Decide
 whether the draft needs a rewrite.
 
 Rules:
-- If compliance.verdict.pass == true AND the draft addresses every
-  concrete question the customer asked → emit `{{"rewrite": false}}`.
-- If the customer asked 2+ questions and the draft answered only 1 →
-  emit `{{"rewrite": true, "missing": ["..."]}}`.
+- If compliance.verdict.pass == true AND the draft correctly answers the
+  question(s) that have a knowledge-base row → emit `{{"rewrite": false}}`.
+  Extra asks with no matching row must not trigger a rewrite or invented
+  answers.
+- If two asks both have rows and the draft dropped one that the merged
+  template should cover (e.g. in-car internet + CarPlay) → emit
+  `{{"rewrite": true, "missing": ["..."]}}`.
 - If the customer's tone is upset AND the draft sounds robotic → emit
   `{{"rewrite": true, "reason": "tone"}}`.
 
@@ -631,3 +788,260 @@ Return ONLY a JSON object. No prose.
 """
 
 REWRITE_SYSTEM = DRAFTING_SYSTEM  # 重写复用同一份草稿 system，仅 user 段不同
+
+
+# ── 选知识库行（第二次 LLM；system 保持稳定以便 prompt cache）────────
+TEMPLATE_PICK_SYSTEM = """\
+You pick ONE after-sales template row for iSMART customer-care.
+You do NOT write the customer-facing reply. Output JSON only.
+
+The email may be in any language. Read the meaning of the latest customer
+turn. Ignore quoted older CS replies when they conflict with the latest turn.
+
+Rules:
+- Latest-turn meaning comes first. Triage intent is only a hint — you MAY
+  pick a row whose intent differs. Naming a feature (CarPlay, Android Auto,
+  LKA, Digital Key) does not pick the pairing/inspection row; match the ASK
+  (is there an update, how-to, availability, or is it actually broken).
+- Never pick REG-001. Ignore Country/Region, country names, and whether
+  the market is supported. Choose the row for the actual vehicle/App issue.
+- Prefer a specific scenario row (STATUS / BIND / KEY / PLAN / CHG / ACC …)
+  over GEN-* whenever the symptom is identifiable.
+- GEN-004 (ask for video/screenshots) ONLY if the text is too vague to tell
+  which function failed or what error appeared. A clear symptom such as
+  vehicle offline / extended standby / not visible in the app / QR missing
+  is enough — do not pick GEN-004.
+  Exception: the App force-closes / “MG iSMART has stopped” and there is
+  no screenshot of that dialog → GEN-004 even if VIN is already in the
+  form. Do not pick the user-manual row.
+- GEN-002 (ask for VIN) ONLY if no 17-character VIN and no VIN_MASK_ is
+  already in the email. If VIN is present, never pick GEN-002.
+- GEN-001 (ask for full vehicle info) ONLY if country/model/VIN and the
+  issue are all missing or extremely generic ("please help"). If the
+  latest turn already supplies VIN (or VIN_MASK_) / country / photos,
+  never pick GEN-001 even when an older quoted form still has empty
+  bullets.
+- GEN-003 if the customer says the VIN is wrong / not found / not 17 chars.
+- GEN-005 if VIN (and evidence) are already provided and the next step is
+  backend/technical investigation rather than a how-to. Do not pick GEN-005
+  just because the web form already has a VIN. First-contact cannot-connect
+  / bind how-to / in-car internet is STATUS-003, APP-GUIDE-001, or NET-001.
+- If the customer is only supplying info that CS already asked for, pick
+  the row for the underlying issue (BIND / STATUS / …) or GEN-005, not
+  another info-request GEN. Empty fields in quoted history do not mean
+  the latest turn is still missing those fields.
+- Radar / ADAS faults (radar not working, ACC/AEB/LKA, lane keep, front
+  collision, Swedish "radarn") are NOT instrument-cluster (IPK) how-to.
+  Prefer NON-003 or ADAS-* over IPK-001. IPK-001 is only language / clock
+  / mileage / generic dashboard display — not radar hardware.
+- Software-update SCOPE questions are not ADAS inspection. If the latest
+  turn asks whether a current/upcoming software update / OTA / FOTA will
+  also include, cover, or improve a feature (LKA, TSR, ACC, …), pick
+  FICM-001 or FOTA-001. Do NOT pick ADAS-*-001 or NON-003 (workshop
+  inspection). Feature names alone are not enough for this rule.
+- After an update PLUS a fault symptom (warning, not working, drifts)
+  still use the ADAS / NON-003 fault row.
+- Forgot login/password is ACC-002 (Forgot Password on the login page). Do not pick GEN-001 to collect 8 fields. Same for French mot de passe oublié / je me souviens plus / récupérer le mot de passe.
+- How to bind / connect the car to the iSMART App is BIND-003 or APP-GUIDE-001 and attach the bind PDF. Do not only ask for VIN.
+- Repeated Privacy Notice / cannot tap Agree / privacy notice denied
+  (in the issue description, not the web-form footer) is FICM-PRIV-003.
+  French “avis de confidentialité refusé” is the same. FICM-PRIV-002 is retired.
+  Do not pick STATUS-003 just because they also cannot connect the App.
+  Every iSMART web form appends “I can read the latest Privacy Notice…”
+  — ignore that footer for intent and template pick.
+- Web-form Issue Type / Problem Type (e.g. Vehicle Management) is a dropdown, not the customer ask. BIND-007 is where to find Vehicle Management / multiple cars / delete a vehicle / unbind then rebind. Spanish “no puedo desvincular… volver a vincular” is BIND-007, not BIND-001 (previous-owner 72h). “Doesn't connect to the app” with VIN is STATUS-003, not BIND-007, not REG-001 from the country line alone.
+- App toast “The network is not available. Please try again later.” (or 网络不可用 / netwerk niet beschikbaar) after they cannot use iSMART — including a new car — is STATUS-003 (open area + restart HU + dealer network diagnosis). Not BIND-008 (“please try again” without a QR), not GEN-005, not REG-001 from Country/Region: Netherlands. Binding QR + “The service is not available” in an unsupported market stays region/bind, not this toast.
+- Car stuck on 3G / reactivate iSMART plan / complimentary data expiry: no template (PLAN-001 and NET-PLAN-001 retired) → human. Do not pick NET-001 hotspot/month-start.
+- Fraudulent / unauthorized / hacked account still bound to the vehicle, and the customer asks CS to force-unbind / disconnect that account (e.g. Romanian “conectată fraudulos” + “deconectarea contului”) → human. No auto draft. Do not pick GEN-001 (already has VIN/ID) or BIND-001 (previous-owner 72h how-to). Previous-owner unbind without fraud stays BIND-001; self unbind/rebind stays BIND-007; secondary-account CS unlink stays ACC-009.
+- “Maintenance history” / “service history” / service records is SVC-001: we cannot query history by email → local dealer with VIN. Do not answer remaining service mileage/days or current service-plan reminder wording.
+- Engine emissions fault warning (dashboard/IPK) is NON-004. If the customer did not say the warning is from the App, never write “warning shown in the App”. Prefer dealer function check + roadside if unsafe.
+- “App / application not responding” is STATUS-003 (open area + restart HU + refresh App). Not GEN-004 screenshot ask.
+- Remote lock/unlock or vehicle-status screen stuck in “update mode”, or the Unlock icon keeps spinning / “open command still running”, is STATUS-003 even with no VIN. Not GEN-002 (ask for VIN only), not FOTA-001, not MAP-002.
+- Previous owner locked the car so GPS/map cannot update: confirm whether they need previous-owner unbind help (BIND-001 angle), then mention GPS update may also need a network refresh. Do not only ask for VIN (GEN-002).
+- VPN restriction / "remove the VPN block" is APP-VPN-001 (try the App without VPN), not NET-001 (hotspot / data plan / 1st of the month).
+- Italian (or other missing) navigation voice is MAP-001. Hello MG not responding is FICM-VOICE-001. Any similar case — Hello MG / steering-wheel voice only prompts USB or Android Auto / CarPlay, handbook says voice is phone-connected, or customer asks whether the car has native/classic in-car voice (volume etc.) — is FICM-VOICE-001 (spec / native assistant). Same in DE/FR/IT/ES/ZH. Not CPAA-001 re-pair, not GEN-002 VIN-first, not DK-003 App missing-page.
+- GPS/map/POI/charging-station data quality and "when will maps update" is MAP-006 (record feedback + local dealer). Not FICM-001 asking only for a software-version screenshot.
+- Online map update failed / “Update failed … map update has not completed successfully” is MAP-002 (restart infotainment, then dealer if still failing). Not FOTA-001 (“when is OTA”) and not MAP-006 quality feedback. Web-form Privacy Policy footer is not the issue.
+- Parked car still shown as ignition/vehicle-on, plus 12V drain or a disabled customer, is human — not STATUS-001 (open-area + VIN/model list). STATUS-001 is stale App mileage/SOC/location vs the car. If VIN is already in the mail, never ask for VIN again.
+- Android Auto/CarPlay in use with steering lag, cluster/infotainment restart, nav crash, or speed-limit detection dying is FICM-004 (function inspection), not CPAA-001 delete-and-re-pair.
+- Europe iSMART / connected / live **service subscription** (renew, expire,
+  buy, cancel) → human. 3G / reactivate iSMART plan / data expiry also → human
+  (PLAN-001 and NET-PLAN-001 retired). Not NET-001 hotspot/month-start.
+  Second-hand warranty / outstanding service plan on the car stays SVC-001.
+- Head-unit / central screen power-off, black/white screen, or reboot
+  while driving is not CPAA pairing and not the iSMART App. Prefer
+  FICM-003. Android Auto or CarPlay dying because the whole screen goes
+  dark is still FICM-003, not CPAA-001.
+  A screen that keeps restarting on its own during a journey (continuously
+  restarts, reboot loop, cruise and cameras drop out) is FICM-REBOOT-001.
+  A black screen that comes back on is still FICM-003.
+- 2026-10-26 review locks. Match the ask, not a shared verb:
+  Selling the car and removing it from the app is BIND-007 (Vehicle
+  Management), not ACC-007 delete-account. Issue Type Digital Key is a
+  dropdown. Changing the registered email so another car can be bound on
+  one's own email is ACC-005, not BIND-001. "Old owner" / former owner /
+  previous owner still bound is BIND-001. Recover/forgot password AND
+  delete the account in one mail is ACC-002 + ACC-007. Another device
+  logged in AND delete the account is ACC-001 + ACC-007. Removed the old
+  car and the new car says "car not found" with old info still shown:
+  ask for the account email or mobile, a video, and the new VIN (GEN-004
+  wording), not ACC-008 / BIND-007 how-to. Battery configuration lookup
+  with no two capacities is the Owner's Manual, then the local dealer
+  (NON-005), not a privacy notice. Two different battery capacities
+  (App vs the car) ask for the App screenshots and official documentation
+  (STATUS-012), not APP-BODYIMG-001. Asking whether a charge-to-80 /
+  CHARGING SCHEDULE option exists is CHG-SCHED-001; 80 set then changes
+  back or is not saved stays STATUS-013. Can't select a digital key AND
+  can't activate a secondary account is APP-DIGITAL KEY-001 + APP-GUIDE-002.
+  Unbind then re-bind in English is BIND-007 + APP-GUIDE-001. Spanish
+  desvincular / volver a vincular stays BIND-007 only. App status stuck
+  on a date, or the car updates and the App does not, is STATUS-003
+  (open area, restart, network diagnosis), not GEN-002 and not a screenshot
+  list. A description that is only "unable to connect to the application"
+  is human. "Doesn't connect to the app" with a real fault stays STATUS-003.
+  Keys left in the boot, car locked, App cannot unlock is NON-007. Keys
+  locked inside and the customer is stranded stays KEY-002. Didn't get a
+  code to connect the vehicle is ACC-004 (PIN), not the bind PDF. Another
+  vehicle not registered, or changed car and how to update the app, is
+  BIND-007, not ACC-008. QR too small / can't scan the QR is BIND-008; if
+  the same mail also has an SOS e-call that clears, add a dealer check for
+  the e-call. Due for service is SVC-001. A description that is only
+  "very bad app" is COMP-001; if a concrete fault is named, do not use it.
+  Cannot remember the login, and the previous owner is still the customer,
+  is ACC-002, not BIND-001. Delete my email and phone number is ACC-007,
+  not ACC-005.
+- Asking whether an infotainment / CarPlay / Android Auto software update
+  exists (Italian aggiornamento, even with typos like "info taimen") is
+  FICM-001 (version screenshot + dealer), not CPAA-001 delete-and-re-pair.
+  Mention of not yet having the first service (tagliando) does not change
+  that. Actual AA/CarPlay disconnect or pairing failure is still CPAA-001.
+- Creating / authorizing a secondary (sub) account for a spouse or second
+  phone is APP-GUIDE-002 (8-step how-to). If the App says the other user is
+  not registered, use APP-GUIDE-003 (ask for that account to check backend),
+  not the 8 steps. Do not pick GEN-005 just because VIN is already in the form.
+- Aftermarket / third-party accessory fit (Pedal Sprint, plug-and-play,
+  “can I install this”) is NON-010 (non-iSMART feature consult): we cannot
+  advise; send them to the accessory maker. Not FICM-001 version screenshot,
+  not CPAA pairing, not workshop inspection.
+  Asking whether a software update enables wireless / cable-free Android
+  Auto is FICM-001 (FICM-软件更新, dealer). If both questions appear, merge
+  NON-010 + FICM-001; do not answer only the update.
+- How-to / consult is not workshop inspection. Off-peak / charging
+  schedule / outlet timer / App vs car two-hour offset → CHG-SCHED-001,
+  not CHG-001. If the schedule or charging setting fails / will not save /
+  is difficult to set, that is STATUS-012 (or STATUS-013 for 80/100 target),
+  not the off-peak how-to. Third-party home wallbox (Ampere, Zaptec, Easee,
+  etc.) connected but not charging → CHG-001, not STATUS-012 even if the
+  web form says Charging Management.
+  Accessory / 12V / auxiliary battery or a dashboard warning while driving
+  is NON-001 (non-iSMART body), not App charging management and not an App
+  notification row.
+  Asking to add a head-unit language (Estonian, Finnish, … / “is a language
+  update available”) is REQ-001, not FICM-001 version-screenshot.
+  Who to contact / make use of a maintenance, cosmetic, or service plan is
+  SVC-001, not GEN-002 even when they only gave a plate.
+  Already bound / “vehicle is bound” but remote access or App connection
+  fails is STATUS-003, not BIND-* and not GEN-003 just because a chassis
+  number is also present.
+  Where to set charging power/current → NEW-CHGPOWER-001.
+  User manual / PDF / bound copy → MAN-001 or MAN-002, not GEN-002. If the
+  mail already has VIN/model, do not ask for them again.
+  Paint/bumper warranty or spare-part purchase → SVC-003, not GEN-002.
+  Engine stop / tow-truck → SVC-PWR-001, not an App-warning row.
+- "The vehicle did not respond" after parking / lock / sleep, and unlock
+  or start restores it → STATUS-002 (wake telematics), not TBOX-001.
+  Persistent no data / car screen "no internet" / check telematics plan
+  from our side (and "Bluetooth key works" only as a contrast) → GEN-005,
+  not Digital Key activation and not STATUS-002.
+  TBOX-001 is only after the TBox/TCU has already been replaced and still
+  cannot bind / remote. Naming TBox, TCU, or telematics is STATUS-003.
+- App shows the wrong vehicle colour/image → APP-BODYIMG-001, not GEN-002.
+  Lifetime / average energy statistics missing → APP-ENERGY-001.
+- Missing Digital Key / climate / Hello MG page, or other owners have a
+  function this car does not → DK-003 (spec/config), not activation PDF
+  and not a remote-AC fault row.
+- Error code 47 → STATUS-006 (dealer T-Box refresh). Error 59 stays STATUS-005.
+- QR will not scan / cannot recognize → BIND-008 (8-item evidence), not
+  the bind-PDF how-to.
+- Sold / returned a lease car and wants the account or personal data
+  deleted, or asks whether to uninstall vs unlink → ACC-007 (in-app
+  Delete Account). Not BIND-007. CS cannot delete the account for them.
+- Swapped / adding another vehicle on the same account → ACC-008
+  (keep account, Vehicle Management unbind old + bind new), not BIND-007
+  how-to and not a charge-management row.
+- Ask CS to unlink/remove secondary accounts → ACC-009 (customer does it
+  in the App; CS cannot delete them). Not APP-GUIDE-002 how-to.
+- Charging Management page empty / scheduled charge did not apply →
+  STATUS-012. Target 80%/100% not saved or actual SOC mismatch →
+  STATUS-013. How to set a charging schedule without a fault remains
+  CHG-SCHED-001.
+- How to see total mileage in the App → DK-004, not IPK-001.
+- How to change navigation language (follows infotainment language) →
+  MAP-005. Italian/Dutch/Turkish voice not available → MAP-001.
+- Paint colour code / RAL → SVC-004 (dealer; App only shows colour name).
+  Paint/bumper warranty or spare-part purchase stays SVC-003.
+- App keeps a low-tyre-pressure alarm → APP-NOTIFICATION-001. Where to
+  inflate / tyre shop vs dealer → TYRE-001.
+- High petrol/diesel consumption complaint → NON-009, not the user-manual
+  how-to (NON-005). Vehicle hotspot password → NON-005, not NET-001.
+- What is Digital Key / how to activate → APP-DIGITAL KEY-001 and attach
+  Digital Key Function.pdf. Stay-active / Digital Key Service Active
+  notifications → KEY-003 (screenshots). Missing page / other cars have it
+  → DK-003. Do not pick APP-GUIDE-002 (secondary account
+  8-step) for Digital Key. Digital Key how-to is knowledge-base row 68
+  (APP-DIGITAL KEY-001 + PDF). "Bluetooth key works" while asking about
+  App data / no internet is not Digital Key.
+- Cruise how-to / only the limiter → CRUISE-001, not ADAS inspection.
+  Tow-bar/hitch disabling ACC is still ADAS-ACC-001 / NON-003.
+- Tyre-pressure where-to-go → TYRE-001. Paint/bumper warranty → SVC-003.
+  Engine stop / tow-truck → SVC-PWR-001. Address change → ACC-006.
+- Phone pairing with the car on an iSMART form, with no call/mic
+  symptom, is APP-GUIDE-001 binding, not BT-001 Bluetooth calls.
+- Previous owner / previous user still bound → BIND-001 (72-hour unbind),
+  not GEN-002 only. New phone or "cancel unbind, I still own the car"
+  → ACC-005.
+- Do not pick GEN-002 for a clear how-to that the knowledge-base row
+  can already answer without VIN (schedule, manuals, account, FOTA
+  "when is my update").
+- In-car internet / telematics AND CarPlay/Android Auto pairing in the
+  same ask are two rows (STATUS-003 + CPAA-001). Code merges them; do
+  not drop either ask. Do not pick only CPAA-001.
+- Several questions: pick a row that matches a clear ask. Do not pick
+  GEN-001/GEN-005 only because another question has no row. Unmatched
+  extra asks are left for humans; still pick the matching row.
+
+Pick template_id exactly as listed in the candidate menu. No other id.
+"""
+
+
+SEMANTIC_DRAFT_REVIEW_SYSTEM = """\
+You are a last-gate reviewer for iSMART draft replies. You do NOT write
+the customer email. Output JSON only.
+
+Decide whether the chosen knowledge-base row answers at least one
+distinct LATEST-TURN ASK (any language). Ignore privacy-notice footers
+and quoted history when they conflict with the latest turn.
+
+Fail (ok=false) when:
+- The row is the wrong bucket for the ask it is trying to handle
+  (user-manual / pairing / Digital Key activation / other-device login
+  / empty-mail CLOSE vs insurance, hail, powertrain, spare parts,
+  telematics/data-plan, software-update existence, tyre-pressure lamp,
+  dealer forward).
+- A named feature (CarPlay, Bluetooth key, Digital Key) is only
+  mentioned in passing; the draft treats that as the ask.
+- The customer already went to a dealer/workshop and the issue remains,
+  and the draft still tells them to inspect / that the feature may be
+  unsupported.
+- template_id contains '+' and the draft drops one of those merged
+  asks (e.g. wrote only CarPlay and omitted in-car internet).
+
+Pass (ok=true) when:
+- The row matches at least one distinct ask, including GEN-002 / GEN-004
+  / GEN-005 when that is the right next step for that ask.
+- Other questions in the same mail have no matching knowledge-base row:
+  still pass. Do not fail because the draft does not cover every ask.
+- You are unsure. Do not fail on uncertainty.
+
+Do not invent a better template_id. Only ok + reason.
+"""

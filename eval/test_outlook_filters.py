@@ -95,7 +95,58 @@ def main() -> int:
 
     print("=" * 70)
     print(f"{passed}/{total} cases passed")
+
+    extra = [
+        ("--stop 无进程", test_stop_when_idle),
+        ("默认写入台账路径", test_default_ledger_out_path),
+        ("--every 不能配 mock", test_every_rejects_mock),
+    ]
+    for label, fn in extra:
+        total += 1
+        try:
+            fn()
+            passed += 1
+            print(f"  ✓ {label}")
+        except Exception as e:
+            print(f"  ✗ {label}: {type(e).__name__}: {e}")
+    print(f"{passed}/{total} cases passed (incl. scan cadence)")
     return 0 if passed == total else 1
+
+
+def test_stop_when_idle():
+    r = subprocess.run(
+        ["python3", "-m", "agent.outlook_drafts", "--stop"],
+        cwd=str(ROOT), capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "没有在跑" in (r.stdout + r.stderr)
+
+
+def test_default_ledger_out_path():
+    import sys
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from argparse import Namespace
+    from agent.outlook_drafts import LEDGER_DIR, _resolve_scan_out_path
+
+    args = Namespace(out=None, no_ledger=False, every=None)
+    p = Path(_resolve_scan_out_path(args))
+    assert p.parent == LEDGER_DIR
+    assert p.name.startswith("outlook_scan_")
+    assert p.suffix == ".json"
+    args2 = Namespace(out=None, no_ledger=True, every=None)
+    assert _resolve_scan_out_path(args2) is None
+
+
+def test_every_rejects_mock():
+    r = subprocess.run(
+        ["python3", "-m", "agent.outlook_drafts",
+         "--mock-mail", str(ROOT / "scripts" / "mock_mail_smoke.json"),
+         "--every", "15", "--no-llm"],
+        cwd=str(ROOT), capture_output=True, text=True,
+    )
+    assert r.returncode != 0
+    assert "--every" in (r.stderr + r.stdout)
 
 
 if __name__ == "__main__":
