@@ -372,30 +372,68 @@ class TemplatePick(BaseModel):
 
 
 class IssueTagPick(BaseModel):
-    """按最新一段的完整诉求选一个问题分类。"""
+    """按最新一段的完整诉求选问题分类。分开的问题可以有 1 到 3 个。"""
 
     model_config = ConfigDict(extra="forbid")
 
     category: str = Field(
         "",
-        description="One allowed category name, or empty if no concrete vehicle/app fault",
+        description="One allowed category name when the message has a single fault, or empty",
+    )
+    categories: list[str] = Field(
+        default_factory=list,
+        description="One to three distinct allowed names, in the order the problems appear. Empty if none",
     )
 
 
 class IssueTagVerify(BaseModel):
-    """核对所选分类是否盖住最新一段的全部诉求，而不是只对上其中一句。"""
+    """核对所选分类是否正好是最新一段里分开的问题，而不是只对上其中一句。"""
 
     model_config = ConfigDict(extra="forbid")
 
     ok: bool = Field(
         ...,
-        description="True only if the category fits the whole latest message",
+        description="True when the list is exactly the distinct problems, one name or up to three",
     )
     category: str = Field(
         "",
-        description="If ok, the same category. If not, the one allowed name that fits the whole message, or empty",
+        description="If there is a single category, repeat it. Empty when there are several or none",
+    )
+    categories: list[str] = Field(
+        default_factory=list,
+        description="If ok, the same names. If not, the allowed names that fit, or empty",
     )
     reason: str = Field("", description="Short English reason")
+
+
+class ChaseCloseReview(BaseModel):
+    """关闭-无效邮件里的纯催促：最新一段是不是只有「为什么不回」。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    invalid_chase: bool = Field(
+        ...,
+        description="True only if the message is just a no-reply nudge and states no vehicle or app fault",
+    )
+    reason: str = Field(
+        "",
+        description="One short English sentence",
+    )
+
+
+class ResolvedCloseReview(BaseModel):
+    """关闭-已解决：最新一段是不是客户在说问题现在已经好了。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    resolved: bool = Field(
+        ...,
+        description="True only if the customer says the issue is fixed now",
+    )
+    reason: str = Field(
+        "",
+        description="One short English sentence",
+    )
 
 
 class SemanticDraftReview(BaseModel):

@@ -78,7 +78,7 @@ import requests
 
 from .azure_llm import AzureLLMClient
 from .email_agent import region_gate_should_escalate
-from .schemas import TriageResult
+from .schemas import ChaseCloseReview, ResolvedCloseReview, TriageResult
 from .mail_tags import (
     extract_vin,
     push_fact_tags,
@@ -245,6 +245,8 @@ def kb_reply_pdf_paths(template_id: str, next_step: str = "") -> list[Path]:
     return out
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+# 不设超时的话，一次 Graph 挂起会把打标或扫信进程留在 launchd 里，下一轮不再启动。
+GRAPH_TIMEOUT_SECS = 90
 GRAPH_SCOPES = ["User.Read", "Mail.ReadWrite"]
 
 
@@ -280,6 +282,8 @@ _ALLOWED_GRAPH_PATTERNS: tuple[str, ...] = (
     "GET /users/{user_id}/messages/{draft_id}/attachments",
     # 只卸本进程 createReply 草稿上被拷来的客户文件，见 _request DELETE 守门。
     "DELETE /users/{user_id}/messages/{draft_id}/attachments/{attachment_id}",
+    # 关闭-无效邮件上已落下的未发送草稿。_request 还要求 id 在 _droppable_draft_ids。
+    "DELETE /users/{user_id}/messages/{draft_id}",
     # 知识库指定的教程 PDF（回复附件模版/）挂到本进程草稿；客户原信文件仍先剥离。
     "POST /users/{user_id}/messages/{draft_id}/attachments",
     # 主分类必须先写入，Outlook 搜索栏「转人工」芯片才能命中。
@@ -427,6 +431,38 @@ class Mail:
     categories: list[str] = field(default_factory=list)
 
 
+def draft_ids_on_closed_invalid(
+    messages: list[dict],
+    drafts_folder_id: str,
+) -> list[str]:
+    """会话里每封非草稿都已是关闭-无效邮件时，返回要删的未发送草稿 id。
+
+    还有一封没关，草稿可能挂在那封上，一个都不删。没有原信的孤立草稿也不删。
+    """
+    if not drafts_folder_id:
+        return []
+    non_drafts = [m for m in messages if not m.get("isDraft")]
+    if not non_drafts:
+        return []
+    for m in non_drafts:
+        cats = [str(c) for c in (m.get("categories") or [])]
+        if (
+            CLOSE_INVALID_CATEGORY not in cats
+            and CLOSE_INVALID_CATEGORY_LEGACY not in cats
+        ):
+            return []
+    out: list[str] = []
+    for m in messages:
+        if not m.get("isDraft"):
+            continue
+        if (m.get("parentFolderId") or "") != drafts_folder_id:
+            continue
+        mid = str(m.get("id") or "")
+        if mid:
+            out.append(mid)
+    return out
+
+
 class GraphClient:
     def __init__(self, token: str, user_id: str = "me"):
         self.user_id = user_id
@@ -438,6 +474,8 @@ class GraphClient:
         # 注册我们 createReply 创建的 draft id —— 只允许 PATCH 这些 id
         # 的 body，防止误改原邮件 / 别人邮件 / 任意邮件
         self._created_draft_ids: set[str] = set()
+        # 仅本次已核对「会话里每封原信都是关闭-无效邮件」的未发送草稿，才允许 DELETE。
+        self._droppable_draft_ids: set[str] = set()
         self._queue_cats_ready = False
         self._master_cats: Optional[list[dict]] = None
 
@@ -446,7 +484,10 @@ class GraphClient:
                  params: Optional[dict] = None) -> requests.Response:
         # method 黑名单（最严格守门）
         if method.upper() in ("DELETE",):
-            if not self._own_draft_file_attachment_delete(path):
+            if (
+                not self._own_draft_file_attachment_delete(path)
+                and not self._closed_invalid_draft_delete(path)
+            ):
                 raise MailboxSafetyError(
                     f"[hard-constraint] 禁止 DELETE 调用：{method} {path}"
                 )
@@ -520,6 +561,7 @@ class GraphClient:
         resp = self.session.request(
             method, f"{GRAPH_BASE}{path}",
             json=json_body, params=params,
+            timeout=GRAPH_TIMEOUT_SECS,
         )
         if resp.status_code == 401:
             LOG.warning("Graph 401，刷新 token 后重试一次")
@@ -531,6 +573,7 @@ class GraphClient:
             resp = self.session.request(
                 method, f"{GRAPH_BASE}{path}",
                 json=json_body, params=params,
+                timeout=GRAPH_TIMEOUT_SECS,
             )
         return resp
 
@@ -555,6 +598,17 @@ class GraphClient:
             return False
         draft_id = unquote(m.group(1))
         return draft_id in self._created_draft_ids
+
+    def _closed_invalid_draft_delete(self, path: str) -> bool:
+        """仅：DELETE /messages/{已核对的未发送草稿}。原信、附件、别人的草稿都不走这里。"""
+        from urllib.parse import unquote
+        if "/attachments" in (path or "") or "/sendMail" in (path or ""):
+            return False
+        m = re.search(r"/messages/([^/]+)/?$", path or "")
+        if not m:
+            return False
+        draft_id = unquote(m.group(1))
+        return draft_id in getattr(self, "_droppable_draft_ids", set())
 
     def _get(self, path: str, params: Optional[dict] = None) -> dict:
         r = self._request("GET", path, params=params)
@@ -1020,6 +1074,112 @@ class GraphClient:
             f"/users/{self.user_id}/messages/{mail_id}",
             body={"categories": cats, "isRead": True},
         )
+        try:
+            dropped = self.drop_drafts_for_closed_invalid(mail_id)
+        except Exception as e:
+            LOG.warning("[DRAFT-DROP] %s 去掉草稿失败: %s", mail_id[:24], e)
+            return
+        if dropped:
+            LOG.info(
+                "[DRAFT-DROP] %s 去掉 %d 封未发送草稿",
+                mail_id[:24], len(dropped),
+            )
+
+    def drop_drafts_for_closed_invalid(self, mail_id: str) -> list[str]:
+        """删掉这个会话里的未发送草稿。会话中还有没关的原信时不删。"""
+        msg = self._get(
+            f"/users/{self.user_id}/messages/{mail_id}",
+            params={"$select": "id,conversationId"},
+        )
+        cid = str(msg.get("conversationId") or "")
+        if not cid:
+            return []
+        folder = self._get(
+            f"/users/{self.user_id}/mailFolders/Drafts",
+            params={"$select": "id"},
+        )
+        drafts_id = str(folder.get("id") or "")
+        cid_esc = cid.replace("'", "''")
+        data = self._get(
+            f"/users/{self.user_id}/messages",
+            params={
+                "$filter": f"conversationId eq '{cid_esc}'",
+                "$top": "30",
+                "$select": "id,isDraft,parentFolderId,categories,subject",
+            },
+        )
+        items = list(data.get("value") or [])
+        if data.get("@odata.nextLink"):
+            LOG.warning("[DRAFT-DROP] 会话过长，不删草稿 %s", mail_id[:24])
+            return []
+        targets = draft_ids_on_closed_invalid(items, drafts_id)
+        dropped: list[str] = []
+        for did in targets:
+            got = self._get(
+                f"/users/{self.user_id}/messages/{did}",
+                params={"$select": "id,isDraft,parentFolderId"},
+            )
+            if not got.get("isDraft") or str(got.get("parentFolderId") or "") != drafts_id:
+                LOG.warning("[DRAFT-DROP] 跳过非草稿 %s", did[:24])
+                continue
+            self._droppable_draft_ids.add(did)
+            try:
+                self._delete(f"/users/{self.user_id}/messages/{did}")
+            finally:
+                self._droppable_draft_ids.discard(did)
+            dropped.append(did)
+        return dropped
+
+    def sweep_drafts_on_closed_invalid(self) -> dict:
+        """草稿箱里，会话原信都已关闭-无效邮件的，删掉未发送草稿。"""
+        url = f"{GRAPH_BASE}/users/{self.user_id}/mailFolders/Drafts/messages"
+        params: Optional[dict] = {
+            "$top": "50",
+            "$select": "id,conversationId,subject,receivedDateTime",
+        }
+        seeds: dict[str, str] = {}
+        while url:
+            resp = self.session.get(url, params=params, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            params = None
+            for item in data.get("value") or []:
+                cid = str(item.get("conversationId") or "")
+                mid = str(item.get("id") or "")
+                if cid and mid and cid not in seeds:
+                    seeds[cid] = mid
+            url = data.get("@odata.nextLink")
+        deleted: list[dict] = []
+        kept = 0
+        for mid in seeds.values():
+            try:
+                got = self._get(
+                    f"/users/{self.user_id}/messages/{mid}",
+                    params={"$select": "id,subject,receivedDateTime,conversationId"},
+                )
+            except Exception as e:
+                LOG.warning("[DRAFT-DROP] 读草稿失败 %s: %s", mid[:24], e)
+                kept += 1
+                continue
+            try:
+                dropped = self.drop_drafts_for_closed_invalid(mid)
+            except Exception as e:
+                LOG.warning("[DRAFT-DROP] %s: %s", mid[:24], e)
+                kept += 1
+                continue
+            if not dropped:
+                kept += 1
+                continue
+            deleted.append({
+                "subject": got.get("subject") or "",
+                "received_at": got.get("receivedDateTime") or "",
+                "count": len(dropped),
+            })
+        LOG.info(
+            "[DRAFT-DROP] 草稿会话 %d，删掉 %d，留下 %d",
+            len(seeds), len(deleted), kept,
+        )
+        return {"conversations": len(seeds), "deleted": deleted, "kept": kept}
 
     def ensure_queue_master_categories(self) -> None:
         """把「转人工」写进邮箱主分类，否则 Outlook 搜索栏按分类筛是空的。"""
@@ -1723,75 +1883,36 @@ _CUSTOMER_NOT_RESOLVED_RE = re.compile(
     r")",
     re.I,
 )
-
-
-_CUSTOMER_ACK_CLOSE_RE = re.compile(
-    r"("
-    r"thank you for (your )?(reply|replying)"
-    r"|thanks for (the |your )?(reply|replying)"
-    r"|thank you\s*[-–]\s*will do"
-    r"|\bwill do (that|so)\b"
-    r"|i('ll| will) do (that|so)"
-    r"|gracias por .{0,24}respuesta"
-    r"|merci pour .{0,24}r[eé]ponse"
-    r"|grazie per .{0,24}risposta"
+_RESOLVED_NEGATED_BEFORE_RE = re.compile(
+    r"(?:\bnot|\bnever|\bstill\s+not|\bstil\s+not)\s+$",
+    re.I,
+)
+_RESOLVED_CONTRAST_AFTER_RE = re.compile(r"\bbut\s+not\b", re.I)
+# 同一句里的「应该已经解决 / 没法解决 / 还在问是不是解决了」。
+# 意大利语 essere risolto 会吃掉「è risolto」里那个词，所以只认单词 essere。
+_RESOLVED_FALSE_CONTEXT_RE = re.compile(
+    r"(?:"
+    r"\b(?:should|would|could|might|may|must|ought\s+to)\s+have\s+been\b"
+    r"|\b(?:supposed|meant|expected)\s+to\s+have\s+been\b"
+    r"|\b(?:cannot|can'?t|could\s+not|couldn'?t)\s+be\s+"
+    r"(?:(?:now|already)\s+)?(?:solved|resolved|fixed)\b"
+    r"|\bnon(?:\s+\S+){0,6}\s+risolt"
+    r"|\bdovrebber?o?(?:\s+\S+){0,6}\s+risolt"
+    r"|\bavrebbe\s+dovuto(?:\s+\S+){0,6}\s+risolt"
+    r"|\b(?:potrebbe|pu[oò]|sar[aà]|verr[aà])(?:\s+\S+){0,4}\s+risolt"
+    r"|\bessere(?:\s+stato)?\s+risolt"
+    r"|\bse\s+[eè]\s+(?:stato\s+)?risolt"
+    r"|\bpas(?:\s+\S+){0,5}\s+r[eé]solu"
+    r"|\b(?:devrait|aurait\s+d[uû])(?:\s+\S+){0,5}\s+r[eé]solu"
+    r"|\bnicht(?:\s+\S+){0,4}\s+gel[oö]st"
+    r"|\b(?:sollte|h[aä]tte)(?:\s+\S+){0,5}\s+gel[oö]st"
+    r"|\bno(?:\s+\S+){0,6}\s+resuelto"
+    r"|\bdeber[ií]a(?:\s+\S+){0,6}\s+resuelto"
+    r"|\bn[aã]o(?:\s+\S+){0,6}\s+resolvido"
+    r"|\bdeveria(?:\s+\S+){0,6}\s+resolvido"
     r")",
     re.I,
 )
-
-# 客服回后客户说了 Thank you / Thanks，同一段没有新问题 → 关闭-已解决。不限字数。
-_CUSTOMER_PURE_THANKS_HEAD_RE = re.compile(
-    r"(?is)^\s*"
-    r"(dear\s+[^,\n]{1,40},\s*)?"
-    r"(many\s+|best\s+|a\s+big\s+)?"
-    r"(thanks|thank\s+you|merci|gracias|grazie|danke|谢谢|非常感谢)\b"
-)
-# 谢谢后面还在报故障、或补了报错截图。不算已解决。
-_CUSTOMER_ONGOING_FAULT_RE = re.compile(
-    r"("
-    r"(?<!no )(?<!without )\berror(?!\s+is\s+(?:now\s+|already\s+)?(?:fixed|gone|resolved|solved))\b"
-    r"|please find attached"
-    r"|attached (?:the |a )?(?:photo|picture|image|screenshot)"
-    r"|screenshot|screen\s*shot"
-    r"|photo of the (?:app|error|screen|issue|problem)"
-    r")",
-    re.I,
-)
-
-
-def _is_pure_thanks_close(latest: str) -> bool:
-    """最新客户段说了谢谢，且没有新故障、新请求。落款和名字不算新问题。"""
-    t = (latest or "").strip()
-    if not t:
-        return False
-    t = re.sub(
-        r"(?is)\n?\s*(sent\s+via|sent\s+from|get\s+outlook).*$",
-        "",
-        t,
-    ).strip()
-    t = re.sub(
-        r"(?is)\n?\s*(best|kind|warm)\s+regards[,.]?\s*.*$",
-        "",
-        t,
-    ).strip()
-    t = re.sub(
-        r"(?is)\n?\s*(sincerely|yours\s+sincerely|cordialement|saludos|cordiali\s+saluti)\b.*$",
-        "",
-        t,
-    ).strip()
-    lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
-    while lines and not _CUSTOMER_PURE_THANKS_HEAD_RE.search(lines[0]):
-        if len(lines[0]) > 40:
-            break
-        lines.pop(0)
-    t = "\n".join(lines).strip()
-    if not t or not _CUSTOMER_PURE_THANKS_HEAD_RE.search(t):
-        return False
-    if _CUSTOMER_NOT_RESOLVED_RE.search(t) or _CUSTOMER_NEW_ASK_RE.search(t):
-        return False
-    if _CHASE_SUBSTANCE_RE.search(t) or _CUSTOMER_ONGOING_FAULT_RE.search(t):
-        return False
-    return True
 
 
 _CUSTOMER_NEW_ASK_RE = re.compile(
@@ -1805,8 +1926,34 @@ _CUSTOMER_NEW_ASK_RE = re.compile(
 )
 
 
+def _resolved_sentence(latest: str, start: int, end: int) -> str:
+    """命中词所在的这一句，不跨句号。用来辨认同句里的否定和「应该已经」。"""
+    before = latest[max(0, start - 180):start]
+    head = re.split(r"[.!?]\s+", before)[-1]
+    tail = re.split(r"[.!?]", latest[end:end + 120], maxsplit=1)[0]
+    return head + latest[start:end] + tail
+
+
+def _resolved_phrase_counts(latest: str) -> bool:
+    """某一项 works fine、同一句 but not、not working fine、应该已经解决、没法解决，不算。"""
+    for m in _CUSTOMER_RESOLVED_RE.finditer(latest):
+        before = latest[max(0, m.start() - 24):m.start()]
+        if _RESOLVED_NEGATED_BEFORE_RE.search(before):
+            continue
+        after = re.split(r"[.!?\n]", latest[m.end():m.end() + 120], maxsplit=1)[0]
+        if _RESOLVED_CONTRAST_AFTER_RE.search(after):
+            continue
+        sentence = _resolved_sentence(latest, m.start(), m.end())
+        if _RESOLVED_FALSE_CONTEXT_RE.search(sentence):
+            continue
+        if re.match(r"\s*[\"']?\?", latest[m.end():m.end() + 8]):
+            continue
+        return True
+    return False
+
+
 def customer_issue_resolved(body_text: str) -> bool:
-    """最新客户段：已修好、会照做，或说了谢谢且没有新问题。"""
+    """最新客户段里出现「已经好了」一类说法。只作候选，不能单独关单。"""
     latest = _latest_customer_turn(body_text or "")
     if not latest.strip():
         return False
@@ -1814,16 +1961,73 @@ def customer_issue_resolved(body_text: str) -> bool:
         return False
     if _CUSTOMER_NEW_ASK_RE.search(latest):
         return False
-    if _CUSTOMER_RESOLVED_RE.search(latest):
-        return True
-    if _is_pure_thanks_close(latest):
-        return True
-    if not _CUSTOMER_ACK_CLOSE_RE.search(latest):
+    return _resolved_phrase_counts(latest)
+
+
+_RESOLVED_CLOSE_SYSTEM = """\
+You decide whether this customer email should be closed as already resolved.
+
+Read the latest customer message as a whole. A single phrase like "resolved", "risolto", "working fine", or "connection was restored" is not enough.
+
+Set resolved to true only when the customer themselves says the problem is finished now, or the feature works again now.
+
+Set resolved to false if any of these are true:
+- They still have a fault, ask for help, ask for confirmation, or ask you to investigate.
+- It used to work, or it worked only after a step and then failed again.
+- One function works and another still fails.
+- Someone said it should have been fixed, or they say it cannot be fixed.
+- They are asking whether it is fixed.
+- Thanks, "will do", or sending more information, without saying it is fixed.
+
+Examples:
+- "the connection was restored after unlocking. Two days later it failed again. Please advise the next steps." → false
+- "Previously working fine. Please investigate as urgent." → false
+- "should have been resolved with a seal. The roof noise cannot be resolved. I wanted confirmation." → false
+- "its works fine on find my car but not the heating." → false
+- "The issue seems to have been resolved. Thanks again." → true
+- "It's already resolved. Thank you." → true
+- "Il problema è risolto. Grazie." → true
+
+reason is one short English sentence.
+"""
+
+
+def customer_resolved_confirmed(
+    body_text: str,
+    *,
+    llm=None,
+    use_llm: bool = True,
+) -> bool:
+    """候选短语再读一遍最新一段。模型没叫通、或没有模型，不打关闭-已解决。"""
+    if not customer_issue_resolved(body_text):
         return False
-    blob = f"{_form_issue_description(latest)}\n{_webform_score_text(latest)}"
-    if _CHASE_SUBSTANCE_RE.search(blob):
+    if not use_llm or llm is None:
+        LOG.info("[resolved_semantic] skip close, no llm")
         return False
-    return True
+    latest = _latest_customer_turn(body_text or "")
+    latest = _redact_extracted_text(latest)[:4000]
+    try:
+        picked, _ = llm.invoke_json(
+            schema=ResolvedCloseReview,
+            messages=[
+                {"role": "system", "content": _RESOLVED_CLOSE_SYSTEM},
+                {"role": "user", "content": latest or "(empty)"},
+            ],
+            reasoning_effort="low",
+            max_completion_tokens=512,
+            role="resolved_semantic",
+        )
+    except Exception as e:
+        LOG.warning("[resolved_semantic] LLM failed, not closing: %s", e)
+        return False
+    if not isinstance(picked, ResolvedCloseReview):
+        LOG.warning("[resolved_semantic] bad payload, not closing")
+        return False
+    if picked.resolved:
+        LOG.info("[resolved_semantic] confirmed: %s", (picked.reason or "")[:180])
+        return True
+    LOG.info("[resolved_semantic] not resolved: %s", (picked.reason or "")[:180])
+    return False
 
 
 _CHASE_NUDGE_RE = re.compile(
@@ -1861,7 +2065,7 @@ _CHASE_SUBSTANCE_RE = re.compile(
 
 
 def pure_chase_nudge(body_text: str) -> bool:
-    """最新一段只在催「为什么不回」，没有新的车/App 问题。"""
+    """最新一段里出现「为什么不回」，且没有绑车/充电等关键词。只作候选。"""
     latest = _latest_customer_turn(body_text or "")
     desc = _form_issue_description(latest)
     blob = f"{desc}\n{_webform_score_text(latest)}"
@@ -1870,6 +2074,59 @@ def pure_chase_nudge(body_text: str) -> bool:
     if _CHASE_SUBSTANCE_RE.search(blob):
         return False
     return True
+
+
+_CHASE_CLOSE_SYSTEM = """\
+You decide whether this customer email is only a complaint that nobody replied.
+
+Set invalid_chase to true only when the latest message does not describe a vehicle or app fault and does not ask how to do something. It only chases a missing reply.
+
+Set invalid_chase to false when they also describe a problem or ask for a fix, even if they say the dealer, the previous owner, or customer care did not reply. Heated seats, mileage, binding, noise, errors, and "can this be rectified" are real issues.
+
+Examples:
+- "I contacted you already and you never respond. For a car company this is not serious." → true
+- "The heated seats never come on and the EV mileage is not displayed. The dealership gave no reply. Please can someone help." → false
+
+reason is one short English sentence.
+"""
+
+
+def chase_close_confirmed(
+    body_text: str,
+    *,
+    llm=None,
+    use_llm: bool = True,
+) -> bool:
+    """「没人回」只是候选。整段还有故障或请求，不打关闭-无效邮件。模型没叫通也不关。"""
+    if not pure_chase_nudge(body_text):
+        return False
+    if not use_llm or llm is None:
+        LOG.info("[chase_semantic] skip close, no llm")
+        return False
+    latest = _latest_customer_turn(body_text or "")
+    latest = _redact_extracted_text(latest)[:4000]
+    try:
+        picked, _ = llm.invoke_json(
+            schema=ChaseCloseReview,
+            messages=[
+                {"role": "system", "content": _CHASE_CLOSE_SYSTEM},
+                {"role": "user", "content": latest or "(empty)"},
+            ],
+            reasoning_effort="low",
+            max_completion_tokens=512,
+            role="chase_semantic",
+        )
+    except Exception as e:
+        LOG.warning("[chase_semantic] LLM failed, not closing: %s", e)
+        return False
+    if not isinstance(picked, ChaseCloseReview):
+        LOG.warning("[chase_semantic] bad payload, not closing")
+        return False
+    if picked.invalid_chase:
+        LOG.info("[chase_semantic] confirmed: %s", (picked.reason or "")[:180])
+        return True
+    LOG.info("[chase_semantic] has a real issue: %s", (picked.reason or "")[:180])
+    return False
 
 
 def vpn_restriction_needs_human(body_text: str) -> bool:
@@ -1882,7 +2139,8 @@ def vpn_restriction_needs_human(body_text: str) -> bool:
 # → skip 起草，并 tag 关闭-无效邮件。主题语言不同（Issues with Vehicle /
 # Problèmes…）只要内容相同也只留一封草稿。
 # 同一 Graph message id 再扫一遍（same_mail_id）只跳过，不当无效邮件。
-# 同客户来回沟通（最新一段内容不同）不算重复，即使主题相同。
+# 同一条会话（conversationId）里的来回不算重复：补录屏、补说明、再问一次
+# 都留在链路上。只比引用之前的新内容，引用里的旧描述不算又发了一遍。
 # 设计：
 #   - 进程内 LRU（OrderedDict，上限 500）
 #   - 正文：最新客户段（去掉引用和隐私页脚）char 3-gram Jaccard ≥ 0.70
@@ -1980,6 +2238,47 @@ def _dedup_cut_privacy(text: str) -> str:
     return text[:cut].strip()
 
 
+# 去重用的引用切点。允许出现在正文开头（附件跟进常常没有新字，From: 就在第一行）。
+# 选行仍用 template_reply._QUOTE_CUT_RES，这里多出来的不改选行。
+_DEDUP_QUOTE_CUT_RES = (
+    _re.compile(r"(?:^|\n)_{5,}"),
+    _re.compile(r"(?:^|\n)[-_]{5,}\s*Original Message", _re.I),
+    _re.compile(r"(?i)original message\s*-{5,}"),
+    _re.compile(r"(?i)(?:^|\n)\s*-{2,}\s*forwarded message"),
+    _re.compile(r"(?:^|\n)From:\s", _re.I),
+    _re.compile(r"(?:^|\n)Fr[åa]n:\s", _re.I),
+    _re.compile(r"(?:^|\n)Fra:\s", _re.I),
+    _re.compile(r"(?:^|\n)Lähettäjä:\s", _re.I),
+    _re.compile(r"(?:^|\n)发件人\s*[：:]", _re.I),
+    _re.compile(r"(?:^|\n)寄件人\s*[：:]", _re.I),
+    _re.compile(r"(?:^|\n)On .+ wrote:", _re.I),
+    _re.compile(r"(?:^|\n)El .+ escribi[oó]:", _re.I),
+    _re.compile(r"(?:^|\n)Von:\s", _re.I),
+    _re.compile(r"(?:^|\n)De\s*:\s", _re.I),
+    _re.compile(r"(?:^|\n)Da:\s", _re.I),
+    _re.compile(
+        r"(?i)(?:^|\n)\s*(?:Am|Il|Le|Op|Den)\s+.+?\s+"
+        r"(?:schrieb|ha scritto|a écrit|schreef|skrev)\s*:"
+    ),
+    # HTML 去掉 </div> 后，From/Sent 会粘在新内容后面，中间没有换行。
+    _re.compile(
+        r"(?i)(?:From|Fr[åa]n|Fra|Von|Da|De|Van|Od|Lähettäjä|发件人|寄件人)\s*[:：]\s+\S.{0,180}?"
+        r"(?:Sent|Gesendet|Inviato|Envoy[eé]|Enviado|Verzonden|Skickat|发送时间)\s*[:：]"
+    ),
+)
+
+
+def _dedup_latest_text(body_text: str) -> str:
+    """引用之前的新内容。引用从正文开头开始时，也不把历史算进指纹。"""
+    text = body_text or ""
+    cut = len(text)
+    for pat in _DEDUP_QUOTE_CUT_RES:
+        matched = pat.search(text)
+        if matched and matched.start() < cut:
+            cut = matched.start()
+    return text[:cut].strip()
+
+
 def _dedup_form_description(body_text: str) -> str:
     """抽出表单「描述」字段；没有该行则空串。"""
     blob = _dedup_cut_privacy(_dedup_strip_cid_noise(body_text or ""))
@@ -1995,13 +2294,13 @@ def _dedup_form_description(body_text: str) -> str:
 
 
 def _dedup_issue_text(body_text: str) -> str:
-    """去重用的问题正文：优先表单描述行，否则最新客户段去页脚、去 cid。"""
-    desc = _dedup_form_description(body_text or "")
+    """去重用的问题正文：只看引用之前。优先表单描述行，否则新内容去页脚、去 cid。"""
+    visible = _dedup_latest_text(body_text or "")
+    desc = _dedup_form_description(visible)
     if len(_dedup_norm_issue(desc)) >= 8:
         return desc.strip()
-    latest = _latest_customer_turn(body_text or "")
-    latest = _dedup_strip_cid_noise(latest)
-    return _dedup_cut_privacy(latest)
+    visible = _dedup_strip_cid_noise(visible)
+    return _dedup_cut_privacy(visible)
 
 
 def _dedup_issue_contained(a: str, b: str) -> bool:
@@ -2019,6 +2318,11 @@ DEDUP_CACHE_MAX        = 500
 
 # 主题前缀：去掉这些再算 fingerprint（"Re: App not working" 跟原主题算相似）
 _RE_FWD_RE = _re.compile(r"^\s*(?:re|fwd|fw)\s*:\s*", _re.IGNORECASE)
+# 主题已经是回信。旧指纹没有会话号时，不能凭引用里的旧描述把它关成无效。
+_REPLY_SUBJECT_RE = _re.compile(
+    r"^\s*(?:(?:re|aw|sv|fw|fwd)\s*[:：]|回复\s*[:：]|答复\s*[:：])",
+    _re.IGNORECASE,
+)
 
 
 def _dedup_sender_key(sender: str) -> str:
@@ -2038,10 +2342,10 @@ def _dedup_fingerprint(mail: Mail) -> tuple[str, frozenset[str], str]:
     """mail → (normalized_subject, 问题段 3-gram, 规范化问题文本)。
 
     网页表单比整段「描述」（不截末尾 400 字，否则长描述窗口错开、相似度掉到阈值下）。
-    没有描述行才用切页脚后的末尾。cid 图不参与。
+    描述和正文都只取引用之前。没有描述行才用切页脚后的末尾。cid 图不参与。
     """
     subj = _RE_FWD_RE.sub("", mail.subject or "").strip().lower()
-    desc = _dedup_form_description(mail.body_text or "")
+    desc = _dedup_form_description(_dedup_latest_text(mail.body_text or ""))
     if len(_dedup_norm_issue(desc)) >= 8:
         chunk = _dedup_norm_issue(desc)
     else:
@@ -2050,6 +2354,22 @@ def _dedup_fingerprint(mail: Mail) -> tuple[str, frozenset[str], str]:
         if len(chunk) > DEDUP_BODY_CHARS:
             chunk = chunk[-DEDUP_BODY_CHARS:]
     return subj, _dedup_grams(chunk), chunk
+
+
+def _stored_cid(stored: tuple) -> str:
+    return str((stored[5] if len(stored) > 5 else "") or "").strip()
+
+
+def _reply_subject(subject: str) -> bool:
+    return bool(_REPLY_SUBJECT_RE.match(subject or ""))
+
+
+def _same_conversation(mail: Mail, stored: tuple) -> bool:
+    """两条都带了同一个 Graph conversationId，才是同一条链路里的来回。"""
+    cid = (getattr(mail, "conversation_id", "") or "").strip()
+    other = stored[5] if len(stored) > 5 else ""
+    other = (other or "").strip()
+    return bool(cid and other and cid == other)
 
 
 def _dedup_same_subject(a: str, b: str) -> bool:
@@ -2075,10 +2395,10 @@ def _dedup_jaccard(a: frozenset[str], b: frozenset[str]) -> float:
 
 
 class _DuplicateDetector:
-    """同一发件人，或同 VIN 的另一个邮箱，问题正文几乎一样 → 只建一封草稿。不限间隔。
+    """同一发件人另起一封、或同 VIN 的另一个邮箱，问题正文几乎一样 → 只建一封草稿。不限间隔。
 
-    命中返回 {duplicate_of, score, match, same_subject}；否则入缓存并返回 None。
-    store_path 非空时写入磁盘，下一轮 / 另一进程仍能打 关闭-无效邮件。
+    同一条会话里的来回不关。命中返回 {duplicate_of, score, match, same_subject}；
+    否则入缓存并返回 None。store_path 非空时写入磁盘，下一轮 / 另一进程仍能打 关闭-无效邮件。
     """
 
     def __init__(self, threshold: float = DEDUP_JACCARD_THRESHOLD,
@@ -2118,8 +2438,9 @@ class _DuplicateDetector:
                 if not mid or not isinstance(grams, list):
                     continue
                 vin = str(row.get("vin") or "")
+                cid = str(row.get("cid") or "")
                 bucket[mid] = (
-                    subj, frozenset(str(g) for g in grams if g), issue, received, vin,
+                    subj, frozenset(str(g) for g in grams if g), issue, received, vin, cid,
                 )
                 if len(bucket) >= self.max_size:
                     break
@@ -2135,13 +2456,16 @@ class _DuplicateDetector:
             return
         senders: dict[str, list[dict]] = {}
         for sender, bucket in self._buckets.items():
-            senders[sender] = [
-                {
+            rows: list[dict] = []
+            for mid, stored in bucket.items():
+                subj, ngrams, issue, received, vin = stored[:5]
+                cid = stored[5] if len(stored) > 5 else ""
+                rows.append({
                     "id": mid, "subj": subj, "ngrams": list(ngrams),
                     "issue": issue, "received": received, "vin": vin,
-                }
-                for mid, (subj, ngrams, issue, received, vin) in bucket.items()
-            ]
+                    "cid": cid,
+                })
+            senders[sender] = rows
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(
@@ -2197,6 +2521,96 @@ class _DuplicateDetector:
             "same_subject": same_subj,
         }
 
+    def _remember(
+        self,
+        sender_key: str,
+        mail: Mail,
+        subj: str,
+        ngrams: frozenset[str],
+        issue: str,
+        vin: str,
+    ) -> None:
+        """记下这封信的会话。后到的重复信也要留下 conversationId，否则这条链路里的回信会对上另一封连点。"""
+        bucket = self._buckets.setdefault(sender_key, OrderedDict())
+        if mail.id in bucket:
+            bucket.move_to_end(mail.id)
+            self._backfill_cid(sender_key, mail)
+            return
+        bucket[mail.id] = (
+            subj, ngrams, issue, mail.received_at or "", vin,
+            (mail.conversation_id or "").strip(),
+        )
+        self._index_vin(sender_key, mail.id, vin)
+        while len(bucket) > self.max_size:
+            old_id, old = bucket.popitem(last=False)
+            self._unindex_vin(sender_key, old_id, old[4] if len(old) > 4 else "")
+
+    def _backfill_cid(self, sender_key: str, mail: Mail) -> None:
+        """同一封再扫时补上会话号。空着的话，后面的回信对不上这条链路。"""
+        cid = (mail.conversation_id or "").strip()
+        if not cid:
+            return
+        bucket = self._buckets.get(sender_key)
+        if not bucket or mail.id not in bucket:
+            return
+        stored = bucket[mail.id]
+        if _stored_cid(stored):
+            return
+        vin = stored[4] if len(stored) > 4 else ""
+        bucket[mail.id] = (stored[0], stored[1], stored[2], stored[3], vin, cid)
+        self._save()
+
+    def _legacy_reply(self, mail: Mail, stored: tuple) -> bool:
+        """旧记录没有会话号，而这封主题是回信。不能当成另一封连点。"""
+        return not _stored_cid(stored) and _reply_subject(mail.subject)
+
+    def matches_other_message(self, mail: Mail) -> bool:
+        """和其他已记下的信比。同一会话、以及旧记录没有会话号的回信主题，不算重复。不写入。"""
+        subj, ngrams, issue = _dedup_fingerprint(mail)
+        vin = extract_vin(mail.body_text or "") or ""
+        sender_key = _dedup_sender_key(mail.sender)
+        if not sender_key:
+            return False
+
+        def _hit(existing_id: str, stored: tuple, *, cross_vin: bool) -> bool:
+            if existing_id == mail.id or _same_conversation(mail, stored):
+                return False
+            if not cross_vin and self._legacy_reply(mail, stored):
+                return False
+            return self._content_hit(
+                mail, subj, ngrams, issue, existing_id, stored, cross_vin=cross_vin,
+            ) is not None
+
+        for existing_id, stored in (self._buckets.get(sender_key) or {}).items():
+            if _hit(existing_id, stored, cross_vin=False):
+                return True
+        if not vin:
+            return False
+        for other_sender, other_id in list(self._by_vin.get(vin) or []):
+            if other_sender == sender_key or other_id == mail.id:
+                continue
+            other_bucket = self._buckets.get(other_sender)
+            if not other_bucket or other_id not in other_bucket:
+                continue
+            if _hit(other_id, other_bucket[other_id], cross_vin=True):
+                return True
+        return False
+
+    def _thread_already_seen(self, mail: Mail, sender_key: str) -> bool:
+        """这个发件人已经有同一条会话里的信。来回不是连点。"""
+        cid = (mail.conversation_id or "").strip()
+        if not cid:
+            return False
+        for bucket_sender, bucket in self._buckets.items():
+            if bucket_sender != sender_key:
+                continue
+            for existing_id, stored in bucket.items():
+                if existing_id == mail.id:
+                    continue
+                if _same_conversation(mail, stored):
+                    return True
+        return False
+
     def check_and_record(self, mail: Mail) -> Optional[dict]:
         subj, ngrams, issue = _dedup_fingerprint(mail)
         vin = extract_vin(mail.body_text or "") or ""
@@ -2207,21 +2621,29 @@ class _DuplicateDetector:
         if bucket is None:
             bucket = OrderedDict()
             self._buckets[sender_key] = bucket
+        if mail.id in bucket:
+            # 同一封信再扫：禁止建第二封草稿，也不是「无效邮件」。
+            # 顺手补会话号，后面的回信才能认出这条链路。
+            self._backfill_cid(sender_key, mail)
+            return {
+                "duplicate_of": mail.id,
+                "score": 1.0,
+                "match": "same_mail_id",
+                "same_subject": True,
+            }
+        if self._thread_already_seen(mail, sender_key):
+            self._remember(sender_key, mail, subj, ngrams, issue, vin)
+            self._save()
+            return None
+        matches: list[tuple[str, tuple, dict, str]] = []
         for existing_id, stored in bucket.items():
-            if existing_id == mail.id:
-                # 同一封信再扫：禁止建第二封草稿，也不是「无效邮件」。
-                return {
-                    "duplicate_of": existing_id,
-                    "score": 1.0,
-                    "match": "same_mail_id",
-                    "same_subject": True,
-                }
+            if self._legacy_reply(mail, stored):
+                continue
             hit = self._content_hit(
                 mail, subj, ngrams, issue, existing_id, stored, cross_vin=False,
             )
             if hit is not None:
-                bucket.move_to_end(existing_id)
-                return hit
+                matches.append((existing_id, stored, hit, sender_key))
         if vin:
             for other_sender, other_id in list(self._by_vin.get(vin) or []):
                 if other_sender == sender_key or other_id == mail.id:
@@ -2229,19 +2651,104 @@ class _DuplicateDetector:
                 other_bucket = self._buckets.get(other_sender)
                 if not other_bucket or other_id not in other_bucket:
                     continue
+                stored = other_bucket[other_id]
+                if _same_conversation(mail, stored):
+                    self._remember(sender_key, mail, subj, ngrams, issue, vin)
+                    self._save()
+                    return None
                 hit = self._content_hit(
-                    mail, subj, ngrams, issue, other_id, other_bucket[other_id],
-                    cross_vin=True,
+                    mail, subj, ngrams, issue, other_id, stored, cross_vin=True,
                 )
                 if hit is not None:
-                    return hit
-        bucket[mail.id] = (subj, ngrams, issue, mail.received_at or "", vin)
-        self._index_vin(sender_key, mail.id, vin)
-        while len(bucket) > self.max_size:
-            old_id, old = bucket.popitem(last=False)
-            self._unindex_vin(sender_key, old_id, old[4] if len(old) > 4 else "")
+                    matches.append((other_id, stored, hit, other_sender))
+        if not matches:
+            self._remember(sender_key, mail, subj, ngrams, issue, vin)
+            self._save()
+            return None
+        current_at = mail.received_at or ""
+        later_ids: list[str] = []
+        keeper_hit: Optional[dict] = None
+        for existing_id, stored, hit, _owner in matches:
+            stored_at = stored[3] if len(stored) > 3 else ""
+            if current_at and stored_at and current_at < stored_at:
+                later_ids.append(existing_id)
+            elif keeper_hit is None:
+                keeper_hit = hit
+        self._remember(sender_key, mail, subj, ngrams, issue, vin)
         self._save()
-        return None
+        if later_ids and keeper_hit is None:
+            # 扫信从新到旧时，后一封会先入库。更早的那封才是要安抚、要打问题标的一封。
+            return {
+                "supersede": True,
+                "later_ids": later_ids,
+                "duplicate_of": mail.id,
+                "score": max(float(item[2]["score"]) for item in matches),
+                "match": "earlier_original",
+                "same_subject": any(item[2].get("same_subject") for item in matches),
+            }
+        return keeper_hit or matches[0][2]
+
+
+def thread_has_other_customer(mail: Mail, thread_msgs: list[dict] | None, self_emails: set[str]) -> bool:
+    """同一条会话里还有另一封客户来信。这种来回不该留在关闭-无效邮件上。"""
+    own = {e.casefold() for e in self_emails if e}
+    for msg in thread_msgs or []:
+        if msg.get("is_draft") or str(msg.get("id") or "") == mail.id:
+            continue
+        sender = (msg.get("sender_email") or "").casefold()
+        if sender and sender not in own:
+            return True
+    return False
+
+
+def should_reopen_invalid_close(
+    mail: Mail,
+    thread_msgs: list[dict] | None,
+    self_emails: set[str],
+    dedup: _DuplicateDetector,
+) -> bool:
+    """关掉的是同一会话里的来回，或对上了没有会话号的回信主题。连点、误转发、系统信不重开。"""
+    if system_notification_skip_reason(mail) or misdirected_junk_skip_reason(mail):
+        return False
+    if thread_has_other_customer(mail, thread_msgs, self_emails):
+        return True
+    return _reply_subject(mail.subject) and not dedup.matches_other_message(mail)
+
+
+def _rescan_comfort_needs_draft(g, mail: Mail, router) -> bool:
+    """这封已经扫过。只发过安抚、还没有业务草稿时，再走一遍起草。"""
+    from .comfort_reply import comfort_only_without_business_draft
+
+    if g is None or not (getattr(mail, "conversation_id", "") or "").strip():
+        return False
+    try:
+        thread = g.get_conversation_thread(mail.conversation_id)
+    except Exception as e:
+        LOG.warning("[comfort-redraft] thread fetch failed: %s", e)
+        return False
+    return comfort_only_without_business_draft(
+        thread, cs_mailbox_set(router), mail.id,
+    )
+
+
+def _move_duplicate_marks_to_earliest(g, later_id: str, earliest_id: str) -> None:
+    """后一封连点关掉。问题标和已安抚留在最早一封上。"""
+    from .comfort_reply import COMFORT_CATEGORY
+
+    existing = g.get_categories(later_id)
+    if not isinstance(existing, list):
+        existing = []
+    existing = [str(c) for c in existing if str(c).strip()]
+    had_comfort = COMFORT_CATEGORY in existing
+    stripped = [
+        c for c in existing
+        if not c.startswith("问题:") and c != COMFORT_CATEGORY
+    ]
+    if stripped != existing:
+        g.set_categories(later_id, stripped)
+    g.apply_close_invalid(later_id)
+    if had_comfort and earliest_id:
+        g.add_category(earliest_id, COMFORT_CATEGORY)
 
 
 def should_skip(mail: Mail, triage: dict, tmpl: Optional[dict],
@@ -2565,7 +3072,7 @@ _SYSTEM_SKIP_SENDERS = frozenset({
     "mailer-daemon@microsoft.com",
 })
 _SYSTEM_SKIP_SUBJECT_RE = re.compile(
-    r"(邮件撤回|撤回报告|message\s*recall|undeliverable(?:\s+mail)?|"
+    r"(邮件撤回|撤回报告|未送达|message\s*recall|undeliverable(?:\s+mail)?|"
     r"delivery\s+status\s+notification)",
     re.I,
 )
@@ -2781,7 +3288,7 @@ def process_mail(
             "tag_applied":        tag_applied,
         }
 
-    if customer_issue_resolved(orig_body):
+    if customer_resolved_confirmed(orig_body, llm=llm, use_llm=use_llm):
         LOG.info("[CLOSE-RESOLVED] %s", mail.subject[:50])
         if g is not None and not dry_run:
             g.apply_customer_resolved(mail.id)
@@ -2795,7 +3302,7 @@ def process_mail(
             "close_tag":          CLOSE_RESOLVED_CATEGORY,
         }
 
-    if pure_chase_nudge(orig_body):
+    if chase_close_confirmed(orig_body, llm=llm, use_llm=use_llm):
         LOG.info("[CLOSE-INVALID chase] %s", mail.subject[:50])
         tag_applied = False
         if g is not None and not dry_run:
@@ -2817,13 +3324,35 @@ def process_mail(
 
     # 重复（连点 / 同文再发）先关闭。关单摘掉转人工，不建草稿。
     # 必须在「引用客服回复 → 转人工」之前，否则第二封会进人工队列。
+    # 扫信从新到旧。后一封先入库时，更早的那封要留下来打问题标和已安抚。
     if dedup is not None:
         dup = dedup.check_and_record(mail)
+        if dup is not None and dup.get("supersede"):
+            if g is not None and not dry_run:
+                for later_id in dup.get("later_ids") or []:
+                    try:
+                        _move_duplicate_marks_to_earliest(g, later_id, mail.id)
+                    except Exception as e:
+                        LOG.warning(
+                            "[DEDUP] 后一封 %s 改挂到最早一封失败: %s",
+                            str(later_id)[:24], e,
+                        )
+            dup = None
         if dup is not None:
             is_rescan = dup.get("match") == "same_mail_id"
+            comfort_gap = (
+                is_rescan
+                and not allow_rescan
+                and _rescan_comfort_needs_draft(g, mail, router)
+            )
             if is_rescan and allow_rescan:
                 LOG.info("[RESCAN] %s — same mail id, continue (message-ids)",
                          mail.subject[:50])
+            elif comfort_gap:
+                LOG.info(
+                    "[COMFORT-REDRAFT] %s — only comfort sent, no business draft",
+                    mail.subject[:50],
+                )
             else:
                 skip_kind = "already_scanned" if is_rescan else "duplicate"
                 LOG.info("[SKIP→%s] %s — %s (of %s, score=%.2f)",
@@ -2882,8 +3411,8 @@ def process_mail(
         # 客户只是把安抚信引回来，还没有业务回复。
         hit_mbox = None
     if hit_mbox:
-        if customer_issue_resolved(orig_body):
-            LOG.info("[CLOSE-RESOLVED after CS] %s — body quotes CS but latest is thanks/done",
+        if customer_resolved_confirmed(orig_body, llm=llm, use_llm=use_llm):
+            LOG.info("[CLOSE-RESOLVED after CS] %s — body quotes CS but latest says resolved",
                      mail.subject[:50])
             if g is not None and not dry_run:
                 g.apply_customer_resolved(mail.id)
@@ -2894,7 +3423,7 @@ def process_mail(
                 "skipped":            "customer_resolved",
                 "skip_reason_detail": (
                     f"body quotes CS mailbox {hit_mbox!r}, but customer "
-                    "thanks / says done — close resolved"
+                    "says the issue is resolved — close resolved"
                 ),
                 "matched_self_mbox":  hit_mbox,
                 "queue_untag":        QUEUE_HUMAN_CATEGORY,
@@ -3151,12 +3680,16 @@ def process_mail(
                         f"thread newest sender ({newest['sender_email']}) is us, "
                         f"received at {newest['received_at']}"
                     )
-                elif thread_our_reply_count >= 1 and not pure_chase_nudge(orig_body):
-                    if customer_issue_resolved(orig_body):
+                elif thread_our_reply_count >= 1 and not chase_close_confirmed(
+                    orig_body, llm=llm, use_llm=use_llm,
+                ):
+                    if customer_resolved_confirmed(
+                        orig_body, llm=llm, use_llm=use_llm,
+                    ):
                         thread_skipped_reason = "customer_resolved"
                         thread_skip_detail = (
                             f"CS already sent {thread_our_reply_count} reply(ies); "
-                            "customer thanks / says done — close resolved"
+                            "customer says the issue is resolved — close resolved"
                         )
                     elif not americas_country:
                         thread_skipped_reason = "follow_up_needs_human"
@@ -3397,6 +3930,16 @@ def process_mail(
         LOG.info("[SKIP] %s — semantic_mismatch: %s", mail.subject[:50], semantic_hit)
         return record
 
+    # 安抚信会向客户要 VIN。只问 17 位 VIN 的 GEN-002 不再另建草稿。
+    if str(td.get("template_id") or record.get("template_id") or "") == "GEN-002":
+        _stamp_facts(with_issue_l2=True)
+        record["skipped"] = "vin_asked_by_comfort"
+        record["skip_reason_detail"] = (
+            "comfort mail already asks for the VIN; do not draft GEN-002"
+        )
+        LOG.info("[SKIP] %s — GEN-002, comfort asks for VIN", mail.subject[:50])
+        return record
+
     also_human = bool((result.get("template_doc") or {}).get("also_queue_human"))
     if dry_run:
         _stamp_facts(with_issue_l2=True)
@@ -3615,6 +4158,9 @@ def main() -> int:
         )
         return 1
 
+    # 定时器不带终端证书路径。和安抚打标同一套根证书，否则登录会校验失败。
+    from .foreign_draft_sweep import ensure_trust_store
+    ensure_trust_store()
     token = get_token(tenant_id, client_id)
     g = GraphClient(token, user_id=user_id)
     llm = AzureLLMClient()

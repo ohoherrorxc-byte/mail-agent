@@ -869,6 +869,347 @@ def test_duplicate_detector_same_subject_follow_up_not_dup():
     assert d.check_and_record(m2) is None
 
 
+def test_same_conversation_follow_up_not_duplicate():
+    """同一条会话里来回补充，正文引用了上一封，也不算无效。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    first = (
+        "Good afternoon,\n"
+        "Please find the screenshot of my attempt to bind the vehicle.\n"
+        "The app stops after the QR code."
+    )
+    quoted = (
+        "From: sammie <a@x.com>\n"
+        "Sent: Tuesday, November 3, 2026 10:09 PM\n"
+        "Subject: Help with binding vehicle\n\n"
+        + first
+        + "\n\nPlease provide a complete screen recording of the binding process.\n"
+        "Best regards, iSMART Service Team"
+    )
+    follow = "Get Outlook for iOS\n" + quoted
+    m1 = Mail(
+        id="m1", subject="Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-03T14:09:30Z", body_text=first, is_read=False,
+        conversation_id="conv-bind",
+    )
+    m2 = Mail(
+        id="m2", subject="Re: Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-03T17:04:00Z", body_text=follow, is_read=False,
+        conversation_id="conv-bind",
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_same_conversation_repeated_ask_not_duplicate():
+    """同一条链路里把同一个问题又说了一遍，仍然不是连点。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = "I still cannot bind the vehicle. The QR code disappears after a few seconds."
+    m1 = Mail(
+        id="m1", subject="Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-03T14:09:30Z", body_text=body, is_read=False,
+        conversation_id="conv-bind",
+    )
+    m2 = Mail(
+        id="m2", subject="Re: Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-04T01:04:00Z", body_text=body, is_read=False,
+        conversation_id="conv-bind",
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_quoted_form_in_same_thread_not_duplicate():
+    """跟进信把原表单引在下面，新写的录屏说明不算重发那一段描述。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = _WEB_FORM.format(desc="I cannot bind the vehicle. The QR code fails.")
+    reply = (
+        "Please find the screen recording attached. I tried again and it still fails.\n\n"
+        "From: customer.care\n"
+        "Sent: Monday\n\n"
+        + form
+    )
+    m1 = Mail(
+        id="m1", subject="Issues with Vehicle or iSmart App", sender="a@x.com",
+        received_at="2026-11-01T10:00:00Z", body_text=form, is_read=False,
+        conversation_id="conv-form",
+    )
+    m2 = Mail(
+        id="m2", subject="Re: Issues with Vehicle or iSmart App", sender="a@x.com",
+        received_at="2026-11-03T10:00:00Z", body_text=reply, is_read=False,
+        conversation_id="conv-form",
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_new_conversation_same_body_still_duplicate():
+    """另起一封、内容相同，仍然是连点。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = _WEB_FORM.format(desc="I cannot bind the vehicle. The QR code fails.")
+    m1 = Mail(
+        id="m1", subject="Issues with Vehicle or iSmart App", sender="a@x.com",
+        received_at="2026-11-03T10:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-a",
+    )
+    m2 = Mail(
+        id="m2", subject="Issues with Vehicle or iSmart App", sender="a@x.com",
+        received_at="2026-11-03T10:00:20Z", body_text=body, is_read=False,
+        conversation_id="conv-b",
+    )
+    assert d.check_and_record(m1) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
+
+
+def test_newest_first_keeps_earliest_mail():
+    """后一封先扫到时，最早一封才是留档的那封，后一封改为关掉。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = "My app is broken and I cannot use it at all today."
+    later = Mail(
+        id="later", subject="App not working", sender="alice@x.com",
+        received_at="2026-11-05T08:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-later",
+    )
+    earlier = Mail(
+        id="early", subject="App not working", sender="alice@x.com",
+        received_at="2026-11-01T08:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-early",
+    )
+    assert d.check_and_record(later) is None
+    hit = d.check_and_record(earlier)
+    assert hit is not None and hit.get("supersede") is True
+    assert hit["later_ids"] == ["later"]
+    third = Mail(
+        id="third", subject="App not working", sender="alice@x.com",
+        received_at="2026-11-06T08:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-third",
+    )
+    again = d.check_and_record(third)
+    assert again is not None and not again.get("supersede")
+
+
+def test_reply_in_recorded_thread_not_duplicate_of_other_copy():
+    """连点的另一封会话已经记下之后，这条链路里的回信不再关成无效。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    body = "I cannot bind the vehicle. The QR code fails after a few seconds."
+    original = Mail(
+        id="orig", subject="Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-01T08:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-a",
+    )
+    other = Mail(
+        id="other", subject="Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-01T08:05:00Z", body_text=body, is_read=False,
+        conversation_id="conv-b",
+    )
+    reply = Mail(
+        id="reply", subject="Re: Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-02T08:00:00Z", body_text=body, is_read=False,
+        conversation_id="conv-b",
+    )
+    assert d.check_and_record(original) is None
+    assert d.check_and_record(other) is not None
+    assert d.check_and_record(reply) is None
+
+
+def test_reopen_invalid_only_for_thread_or_legacy_reply():
+    """同一会话里的来回要重开。另一条会话里的连点不重开。"""
+    from agent.outlook_drafts import (
+        Mail, _DuplicateDetector, should_reopen_invalid_close,
+    )
+    d = _DuplicateDetector()
+    form = "The air pressure indicator does not work after changing tires."
+    original = Mail(
+        id="orig", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-12T01:00:00Z",
+        body_text=form, is_read=True, conversation_id="conv-a",
+    )
+    assert d.check_and_record(original) is None
+    follow = Mail(
+        id="follow", subject="Re: Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-14T01:00:00Z",
+        body_text=form, is_read=True, conversation_id="conv-a",
+    )
+    thread = [
+        {"id": "orig", "sender_email": "a@x.com", "is_draft": False,
+         "received_at": "2026-11-12T01:00:00Z", "body_text": form},
+        {"id": "follow", "sender_email": "a@x.com", "is_draft": False,
+         "received_at": "2026-11-14T01:00:00Z", "body_text": form},
+    ]
+    assert should_reopen_invalid_close(follow, thread, set(), d)
+    other = Mail(
+        id="other", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-15T01:00:00Z",
+        body_text=form, is_read=True, conversation_id="conv-b",
+    )
+    assert not should_reopen_invalid_close(other, [], set(), d)
+
+
+def test_reply_subject_with_empty_stored_cid_not_closed():
+    """旧指纹没有会话号时，Re/Aw/回复 不按连点关闭。新表单仍关闭。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = "The air pressure indicator does not work after changing tires."
+    original = Mail(
+        id="orig", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-04T06:00:00Z",
+        body_text=form, is_read=False, conversation_id="",
+    )
+    reply = Mail(
+        id="reply", subject="Aw: 回复: Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-15T14:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-reply",
+    )
+    fresh = Mail(
+        id="fresh", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-16T08:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-fresh",
+    )
+    assert d.check_and_record(original) is None
+    assert d.check_and_record(reply) is None
+    hit = d.check_and_record(fresh)
+    assert hit is not None and hit.get("match") != "same_mail_id"
+
+
+def test_different_conversation_reply_still_duplicate():
+    """两边都有会话号、而且不是同一条时，另起一封的回信仍关闭。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = "The air pressure indicator does not work after changing tires."
+    original = Mail(
+        id="orig", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-04T06:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-a",
+    )
+    other = Mail(
+        id="other", subject="Re: Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-15T14:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-b",
+    )
+    assert d.check_and_record(original) is None
+    hit = d.check_and_record(other)
+    assert hit is not None and hit.get("duplicate_of") == "orig"
+
+
+def test_rescan_backfills_conversation_id():
+    """同一封再扫带上会话号之后，这条链路里的回信不再关。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = "The air pressure indicator does not work after changing tires."
+    first = Mail(
+        id="orig", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-04T06:00:00Z",
+        body_text=form, is_read=False, conversation_id="",
+    )
+    again = Mail(
+        id="orig", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-04T06:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-a",
+    )
+    follow = Mail(
+        id="follow", subject="Problems with vehicles or the iSmart app",
+        sender="a@x.com", received_at="2026-11-18T08:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-a",
+    )
+    assert d.check_and_record(first) is None
+    assert d.check_and_record(again)["match"] == "same_mail_id"
+    assert d.check_and_record(follow) is None
+
+
+def test_swedish_quote_header_is_not_a_resend():
+    """瑞典文 Från: 后面是引用，不把旧描述算成又发了一遍。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = "The air pressure indicator does not work after changing tires."
+    reply = (
+        "It still only shows a dash on the cluster.\n\n"
+        "Från: customer.care@ismart-service.com\n"
+        "Skickat: den 19 november 2026 01:40\n"
+        + form
+    )
+    m1 = Mail(
+        id="m1", subject="Problem med fordon eller iSmart-appen",
+        sender="a@x.com", received_at="2026-11-18T01:00:00Z",
+        body_text=form, is_read=False, conversation_id="conv-a",
+    )
+    m2 = Mail(
+        id="m2", subject="SV: Problem med fordon eller iSmart-appen",
+        sender="a@x.com", received_at="2026-11-20T01:00:00Z",
+        body_text=reply, is_read=False, conversation_id="conv-b",
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_glued_quote_header_is_not_a_resend():
+    """引用头和正文粘在一行时，只比新写的那一段。"""
+    from agent.outlook_drafts import _DuplicateDetector, Mail
+    d = _DuplicateDetector()
+    form = "I cannot bind the vehicle. The QR code fails after a few seconds."
+    reply = (
+        "Please find the screen recording. It still stops on the QR page."
+        "From: care@ismart-service.com Sent: Monday, November 2, 2026 9:00 AM "
+        + form
+    )
+    m1 = Mail(
+        id="m1", subject="Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-01T08:00:00Z", body_text=form, is_read=False,
+        conversation_id="conv-a",
+    )
+    m2 = Mail(
+        id="m2", subject="Re: Help with binding vehicle", sender="a@x.com",
+        received_at="2026-11-02T08:00:00Z", body_text=reply, is_read=False,
+        conversation_id="conv-c",
+    )
+    assert d.check_and_record(m1) is None
+    assert d.check_and_record(m2) is None
+
+
+def test_move_duplicate_marks_to_earliest():
+    from agent.outlook_drafts import _move_duplicate_marks_to_earliest
+
+    class G:
+        def __init__(self):
+            self.cats = {
+                "later": ["问题:App-绑车解绑相关", "已安抚", "VIN:LSJWH4099PN101557"],
+                "early": [],
+            }
+            self.closed = []
+
+        def get_categories(self, mail_id):
+            return list(self.cats[mail_id])
+
+        def set_categories(self, mail_id, categories):
+            self.cats[mail_id] = list(categories)
+
+        def add_category(self, mail_id, category):
+            if category not in self.cats[mail_id]:
+                self.cats[mail_id].append(category)
+
+        def apply_close_invalid(self, mail_id):
+            self.closed.append(mail_id)
+            cats = [c for c in self.cats[mail_id] if c != "转人工"]
+            if "关闭-无效邮件" not in cats:
+                cats.append("关闭-无效邮件")
+            self.cats[mail_id] = cats
+
+    g = G()
+    _move_duplicate_marks_to_earliest(g, "later", "early")
+    assert g.closed == ["later"]
+    assert "问题:App-绑车解绑相关" not in g.cats["later"]
+    assert "已安抚" not in g.cats["later"]
+    assert "VIN:LSJWH4099PN101557" in g.cats["later"]
+    assert "关闭-无效邮件" in g.cats["later"]
+    assert g.cats["early"] == ["已安抚"]
+
+
 _WEB_FORM = """\
 Caro team di assistenza iSmart,
 
@@ -939,8 +1280,8 @@ def test_duplicate_detector_web_form_resubmit_is_dup():
     assert r["duplicate_of"] == "m1"
 
 
-def test_duplicate_detector_days_later_same_issue_not_invalid():
-    """客服要过 VIN 后再交同一张表，不是几秒连点，不能打无效邮件。"""
+def test_duplicate_detector_days_later_same_issue_still_dup():
+    """同一段描述隔很多天再发，仍然是重复。不限间隔。"""
     from agent.outlook_drafts import _DuplicateDetector, Mail
     d = _DuplicateDetector()
     subj = "Issues with Vehicle or iSmart App"
@@ -956,7 +1297,9 @@ def test_duplicate_detector_days_later_same_issue_not_invalid():
         received_at="2026-09-09T08:00:00Z", body_text=body, is_read=False,
     )
     assert d.check_and_record(m1) is None
-    assert d.check_and_record(m2) is None
+    r = d.check_and_record(m2)
+    assert r is not None
+    assert r["duplicate_of"] == "m1"
 
 
 def test_duplicate_detector_minutes_later_still_dup():
@@ -1734,6 +2077,47 @@ def test_apply_close_invalid_marks_read():
     assert "VIN:LSJWH4099PN101557" in body["categories"]
 
 
+def test_resolved_close_reads_semantics_before_tag():
+    from agent.outlook_drafts import (
+        customer_issue_resolved, customer_resolved_confirmed,
+    )
+    from agent.schemas import ResolvedCloseReview
+
+    class _LLM:
+        def __init__(self, resolved: bool, boom: bool = False):
+            self.resolved = resolved
+            self.boom = boom
+            self.calls = 0
+
+        def invoke_json(self, **kwargs):
+            self.calls += 1
+            if self.boom:
+                raise RuntimeError("down")
+            return ResolvedCloseReview(resolved=self.resolved, reason="t"), None
+
+    complaint = (
+        "Previously working fine with the car. Please investigate as urgent."
+    )
+    assert customer_issue_resolved(complaint)
+    assert not customer_resolved_confirmed(complaint, llm=None, use_llm=True)
+    no = _LLM(False)
+    assert not customer_resolved_confirmed(complaint, llm=no, use_llm=True)
+    assert no.calls == 1
+    yes = _LLM(True)
+    assert customer_resolved_confirmed(
+        "Yes, it's already resolved.\n\nThank you.", llm=yes, use_llm=True,
+    )
+    quiet = _LLM(True)
+    assert not customer_resolved_confirmed(
+        "Thank you for replying.", llm=quiet, use_llm=True,
+    )
+    assert quiet.calls == 0
+    down = _LLM(True, boom=True)
+    assert not customer_resolved_confirmed(
+        "Yes, it's already resolved.", llm=down, use_llm=True,
+    )
+
+
 def test_apply_customer_resolved_does_not_mark_read():
     """关闭-已解决只改 categories，不改 isRead。"""
     from agent.outlook_drafts import GraphClient, CLOSE_RESOLVED_CATEGORY
@@ -1779,24 +2163,52 @@ def test_customer_issue_resolved_reestablished_connection():
     assert customer_issue_resolved(
         "Good morning,\n\nYes, it's already resolved.\n\nThank you."
     )
-    assert customer_issue_resolved("Thank you for replying.")
+    assert not customer_issue_resolved("Thank you for replying.")
     nieves = (
         "Thank you for replying.\n"
         "El jue, 10 sept 2026, 10:21, customer.care "
         "<customer.care@ismart-service.com> escribió:\n"
         "Please try the following steps to bind the vehicle...\n"
     )
-    assert customer_issue_resolved(nieves)
+    assert not customer_issue_resolved(nieves)
     marek = (
         "Thank you - will do that\n"
         "On Thu, Sep 10, 2026 at 8:07 AM customer.care "
         "<customer.care@ismart-service.com> wrote:\n"
         "Regarding the windscreen stone chip, contact the dealer...\n"
     )
-    assert customer_issue_resolved(marek)
+    assert not customer_issue_resolved(marek)
     assert customer_issue_resolved(
         "It works fine when not using the VPN\n\nBest regards\n\nJoey Pierce"
     )
+    assert not customer_issue_resolved(
+        "hi i have been trying to use the remote heat charging heating options "
+        "and it never works always get a error message saying no connection "
+        "even if I am right next to the vehicle. its works fine on find my car "
+        "but not these. I went to the dealership and they said it's a issue at "
+        "your end. hope you can help"
+    )
+    assert not customer_issue_resolved(
+        "Good day, It is stil not working fine, see attachment."
+    )
+    assert customer_issue_resolved(
+        "It's ok, it's working again. The previous update was not working."
+    )
+    assert not customer_issue_resolved(
+        "Il fischio in cabina dovrebbe essere stato risolto usando un prodotto "
+        "MG per le guarnizioni. Il rumore del tetto panoramico non può essere "
+        "risolto. Volevo conferme."
+    )
+    assert not customer_issue_resolved(
+        "The dealer said the whistle should have been resolved with a seal. "
+        "The roof noise cannot be resolved. I wanted confirmation."
+    )
+    assert not customer_issue_resolved(
+        "It would have been fixed if the workshop had the part."
+    )
+    assert not customer_issue_resolved("Volevo sapere se è stato risolto.")
+    assert customer_issue_resolved("Buongiorno, il problema è risolto. Grazie.")
+    assert customer_issue_resolved("È stato risolto, grazie.")
     assert not customer_issue_resolved(
         "Thank you for replying, but it still fails to bind."
     )
@@ -1813,15 +2225,30 @@ def test_customer_issue_resolved_reestablished_connection():
         "authority to delete user accounts on your behalf. "
         "Open the iSMART app and tap Delete Account.\n"
     )
-    assert customer_issue_resolved(janet)
-    assert customer_issue_resolved("Thank you 😊")
-    assert customer_issue_resolved("Thanks!\n\nSent via BT Email App")
-    assert customer_issue_resolved(
+    assert not customer_issue_resolved(janet)
+    assert not customer_issue_resolved("Thank you 😊")
+    assert not customer_issue_resolved("Thanks!\n\nSent via BT Email App")
+    assert not customer_issue_resolved(
         "Thank you, I managed to link my app to my vehicle.\n"
         "Thank you very much for your answer.\n"
         "Sincerely,\n"
         "Christophe CLEMENT"
     )
+    seat = (
+        "Hi\n\n"
+        "Thanks for getting in contact, requested answers are in blue below:\n\n"
+        "As your feedback involves technical details, we kindly request the "
+        "following information to better assist you and resolve the issue:\n\n"
+        "4. Vehicle identification number: LSJ WR4097SS082 479\n"
+        "5. Description of the issues:\n"
+        "The app does not appear to heat the steering wheel or driver's seat "
+        "in advance, although it says the 9-minute setting was successful. "
+        "When the heating for both the seat and steering wheel is turned on "
+        "while in the car, they both work. The garage could not find anything "
+        "wrong and said it was an app issue rather than a problem with the car.\n\n"
+        "With kind regards\nSara"
+    )
+    assert not customer_issue_resolved(seat)
     assert not customer_issue_resolved(
         "Thank you, but the app still will not bind my car."
     )
@@ -1840,15 +2267,86 @@ def test_customer_issue_resolved_reestablished_connection():
     )
 
 
+def test_gen002_vin_draft_skipped_because_comfort_asks():
+    from unittest.mock import patch
+    from agent.outlook_drafts import GraphClient, Mail, MailboxRouter, process_mail
+
+    g = MagicMock(spec=GraphClient)
+    g.create_draft_reply = MagicMock()
+    mail = Mail(
+        id="vin1",
+        subject="Issues with Vehicle or iSmart App",
+        sender="a@b.com",
+        received_at="2026-11-20T00:00:00Z",
+        body_text="The app will not connect. I do not know the VIN.",
+        is_read=False,
+    )
+    result = {
+        "triage": {
+            "intent": "other",
+            "urgency": "P3",
+            "region": "North America",
+            "language": "en",
+            "red_flags": [],
+            "auto_reply_level": "auto_draft_needs_info",
+            "required_info_group": [],
+        },
+        "template_doc": {
+            "template_id": "GEN-002",
+            "level": "auto_draft_needs_info",
+        },
+        "filled_body": (
+            "To check this further, please provide the full 17-character VIN."
+        ),
+        "template_forbidden": "",
+        "cs_next_step": "",
+        "cs_human_trigger": "",
+        "cs_level_note": "",
+    }
+    with patch("agent.outlook_drafts.run_template_reply", return_value=result):
+        rec = process_mail(
+            mail, g=g, llm=None, templates=[], allowlist=None,
+            dry_run=True, use_llm=False,
+            router=MailboxRouter(default="customer.care@ismart-service.com"),
+            dedup=None,
+        )
+    assert rec.get("skipped") == "vin_asked_by_comfort", rec
+    assert rec.get("queue_tag") != "转人工"
+    g.create_draft_reply.assert_not_called()
+
+
 def test_pure_chase_nudge_close_invalid_not_human():
     from agent.outlook_drafts import (
         GraphClient, Mail, MailboxRouter, process_mail, pure_chase_nudge,
+        chase_close_confirmed,
     )
+    from agent.schemas import ChaseCloseReview
+
+    class _LLM:
+        def __init__(self, invalid_chase: bool):
+            self.invalid_chase = invalid_chase
+            self.calls = 0
+
+        def invoke_json(self, **kwargs):
+            self.calls += 1
+            return ChaseCloseReview(invalid_chase=self.invalid_chase, reason="t"), None
+
     body = (
         "I have contacted you at this email already sometimes and never respond. "
         "For a car company it is really not serious."
     )
     assert pure_chase_nudge(body)
+    assert not chase_close_confirmed(body, llm=None, use_llm=True)
+    yes = _LLM(True)
+    assert chase_close_confirmed(body, llm=yes, use_llm=True)
+    seats = (
+        "The heated seats have never actually been on, and I cannot see the "
+        "EV mileage. I contacted the dealership several times with no reply. "
+        "Please can someone help."
+    )
+    assert pure_chase_nudge(seats)
+    no = _LLM(False)
+    assert not chase_close_confirmed(seats, llm=no, use_llm=True)
     quoted = (
         body
         + "\nOn Mon, customer.care <customer.care@ismart-service.com> wrote:\n"
@@ -1872,8 +2370,8 @@ def test_pure_chase_nudge_close_invalid_not_human():
         conversation_id="c1",
     )
     rec = process_mail(
-        mail, g=g, llm=None, templates=[], allowlist=None,
-        dry_run=True, use_llm=False, router=router, dedup=None,
+        mail, g=g, llm=yes, templates=[], allowlist=None,
+        dry_run=True, use_llm=True, router=router, dedup=None,
     )
     assert rec.get("skipped") == "pure_chase_nudge", rec
     assert rec.get("close_tag") == "关闭-无效邮件"
@@ -1881,8 +2379,8 @@ def test_pure_chase_nudge_close_invalid_not_human():
     g.apply_close_invalid.assert_not_called()  # dry_run
 
     rec2 = process_mail(
-        mail, g=g, llm=None, templates=[], allowlist=None,
-        dry_run=False, use_llm=False, router=router, dedup=None,
+        mail, g=g, llm=yes, templates=[], allowlist=None,
+        dry_run=False, use_llm=True, router=router, dedup=None,
     )
     assert rec2.get("skipped") == "pure_chase_nudge"
     g.apply_close_invalid.assert_called_once_with("chase1")
@@ -2271,7 +2769,7 @@ def test_comfort_reply_detector():
     assert not quoted_reply_is_comfort(business, "customer.care@ismart-service.com")
 
 
-def test_comfort_tag_target_uses_latest_customer_before_comfort():
+def test_comfort_tag_target_uses_earliest_customer_before_comfort():
     from agent.comfort_reply import comfort_tag_target
 
     thread = [
@@ -2290,7 +2788,7 @@ def test_comfort_tag_target_uses_latest_customer_before_comfort():
     ) == "m1"
     assert comfort_tag_target(
         thread, comfort_at="2026-10-20T04:00:00Z", self_emails=own,
-    ) == "m2"
+    ) == "m1"
 
 
 def test_process_mail_comfort_only_still_drafts(monkeypatch):
@@ -2331,6 +2829,72 @@ def test_process_mail_comfort_only_still_drafts(monkeypatch):
     assert "will not connect" in (captured.get("body") or "")
     assert "kindly ask for your patience" not in (captured.get("thread") or "").lower()
     assert rec.get("draft_anchor_id") == "current"
+
+
+def test_process_mail_rescan_drafts_when_only_comfort(monkeypatch):
+    """同一封已经扫过。之后只发了安抚、还没有业务草稿 → 再扫仍起草。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, _DuplicateDetector, process_mail,
+    )
+
+    _stub_business_draft(monkeypatch)
+    d = _DuplicateDetector()
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-11-18T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-11-19T01:00:00Z",
+         "body_text": _COMFORT_PATIENCE, "is_draft": False},
+    ])
+    g.find_unsent_customer_draft = MagicMock(return_value=None)
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current", subject="App will not connect", sender="customer@x.com",
+        sender_display_name="Jane Smith", received_at="2026-11-18T01:00:00Z",
+        body_text="The app will not connect to the car.", is_read=False,
+        conversation_id="conv-comfort",
+    )
+    assert d.check_and_record(mail) is None
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=d,
+    )
+    assert rec.get("skipped") != "already_scanned", rec
+    assert rec.get("would_post_body")
+
+
+def test_process_mail_rescan_stops_when_business_reply_exists(monkeypatch):
+    """同一封再扫，线程里已有业务回复 → 仍跳过，不建第二封。"""
+    from agent.outlook_drafts import (
+        GraphClient, MailboxRouter, Mail, _DuplicateDetector, process_mail,
+    )
+
+    _stub_business_draft(monkeypatch)
+    d = _DuplicateDetector()
+    g = MagicMock(spec=GraphClient)
+    g.get_conversation_thread = MagicMock(return_value=[
+        {"id": "current", "sender_email": "customer@x.com", "sender_name": "Jane",
+         "received_at": "2026-11-18T01:00:00Z",
+         "body_text": "The app will not connect to the car.", "is_draft": False},
+        {"id": "cs1", "sender_email": "cs-team@mgmotor.com", "sender_name": "CS",
+         "received_at": "2026-11-19T01:00:00Z",
+         "body_text": "Please try the steps in the attached guide.", "is_draft": False},
+    ])
+    router = MailboxRouter(uk="cs-team@mgmotor.com")
+    mail = Mail(
+        id="current", subject="App will not connect", sender="customer@x.com",
+        received_at="2026-11-18T01:00:00Z",
+        body_text="The app will not connect to the car.", is_read=False,
+        conversation_id="conv-real",
+    )
+    assert d.check_and_record(mail) is None
+    rec = process_mail(
+        mail, g=g, llm=None, templates=[], allowlist=None,
+        dry_run=True, use_llm=False, router=router, dedup=d,
+    )
+    assert rec.get("skipped") == "already_scanned", rec
 
 
 def test_process_mail_comfort_joins_customer_supplements(monkeypatch):

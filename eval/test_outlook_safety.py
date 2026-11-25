@@ -35,6 +35,7 @@ from agent.outlook_drafts import (
     _html_quote_only,
     _merge_reply_keep_quote,
     _release_scan_lock,
+    draft_ids_on_closed_invalid,
 )
 
 
@@ -50,6 +51,12 @@ def _client() -> GraphClient:
     )
     c._created_draft_ids = set()
     c._queue_cats_ready = False
+    return c
+
+
+def _client_droppable() -> GraphClient:
+    c = _client()
+    c._droppable_draft_ids = {"draft-to-drop"}
     return c
 
 
@@ -126,6 +133,7 @@ def main() -> int:
         ("DELETE copied file on own draft", lambda: _client_with_draft()._request("DELETE", "/users/me/messages/fake-draft-id/attachments/att1")),
         ("GET draft attachments list", lambda: _client_with_draft()._request("GET", "/users/me/messages/fake-draft-id/attachments")),
         ("POST kb pdf on own draft",  lambda: _client_with_draft()._request("POST", "/users/me/messages/fake-draft-id/attachments", json_body={"@odata.type": "#microsoft.graph.fileAttachment", "name": "Digital Key Function.pdf"})),
+        ("DELETE closed-invalid draft", lambda: _client_droppable()._request("DELETE", "/users/me/messages/draft-to-drop")),
         ("GET outlook masterCategories", lambda: _client()._request("GET", "/users/me/outlook/masterCategories")),
         ("POST outlook masterCategories", lambda: _client()._request("POST", "/users/me/outlook/masterCategories", json_body={"displayName": "转人工", "color": "preset9"})),
         ("PATCH outlook masterCategory color", lambda: _client()._request("PATCH", "/users/me/outlook/masterCategories/cat-id", json_body={"color": "preset15"})),
@@ -211,6 +219,38 @@ def main() -> int:
             _release_scan_lock(fd2)
         finally:
             os.environ.pop("EMAILAGENT_SCAN_LOCK", None)
+
+    drafts_folder = "drafts-folder"
+    closed = {
+        "id": "m1", "isDraft": False, "parentFolderId": "inbox",
+        "categories": ["关闭-无效邮件"],
+    }
+    draft = {
+        "id": "d1", "isDraft": True, "parentFolderId": drafts_folder,
+        "categories": [],
+    }
+    total += 1
+    if draft_ids_on_closed_invalid([closed, draft], drafts_folder) == ["d1"]:
+        print("  ✓ closed-invalid conversation drops its draft")
+        passed += 1
+    else:
+        print("  ✗ closed-invalid conversation should drop its draft")
+    total += 1
+    open_mail = {
+        "id": "m2", "isDraft": False, "parentFolderId": "inbox",
+        "categories": ["问题:App-车控车态相关"],
+    }
+    if draft_ids_on_closed_invalid([closed, open_mail, draft], drafts_folder) == []:
+        print("  ✓ mixed conversation keeps the draft")
+        passed += 1
+    else:
+        print("  ✗ mixed conversation should keep the draft")
+    total += 1
+    if draft_ids_on_closed_invalid([draft], drafts_folder) == []:
+        print("  ✓ orphan draft is kept")
+        passed += 1
+    else:
+        print("  ✗ orphan draft should be kept")
 
     print("=" * 60)
     print(f"{passed}/{total} cases passed")

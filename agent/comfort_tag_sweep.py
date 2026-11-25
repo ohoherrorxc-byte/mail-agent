@@ -97,7 +97,11 @@ def tag_once(g: GraphClient, *, dry_run: bool = False) -> dict[str, int]:
     """扫发件箱和草稿箱，给安抚之前的客户来信打标签。"""
     self_emails = cs_mailbox_set(build_router_from_env())
     if not dry_run:
-        _ensure_category(g)
+        try:
+            _ensure_category(g)
+        except (requests.HTTPError, requests.RequestException) as exc:
+            stats["errors"] += 1
+            LOG.warning("ensure category failed, continue tagging: %s", exc)
     stats = {
         "seen": 0,
         "tagged": 0,

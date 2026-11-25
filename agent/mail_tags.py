@@ -4,8 +4,8 @@
   - 三类标签：问题类型、VIN、品牌。没有对应信息 → 这一维不处理。
   - 已有同类标签且值正确 → 保留。
   - VIN / 品牌值不对 → 再打一条正确的，不删旧标签。
-  - 没有人工红标时，「问题:」按完整最新一段选定，再核对一遍；对不上整段就换掉或去掉。
-  - 有人工红标时，「问题:」改成和红标同字。
+  - 没有人工红标时，「问题:」按完整最新一段选定，再核对一遍。一封信里分开的两三个问题各留一条。
+  - 有人工红标时，「问题:」改成和红标同字。红标有几条，紫标就留几条。
 """
 from __future__ import annotations
 
@@ -33,17 +33,27 @@ _KNOWN_BRANDS = {
     "荣威": "Roewe",
     "riddara": "Riddara",
     "maxus": "Maxus",
+    "ldv": "LDV",
+    "im": "IM",
+    "im motors": "IM",
+    "智己": "IM",
 }
 
-# 车型暗示品牌；不靠正文里单独的 "MG iSMART" 打品牌。
-_MODEL_IMPLIES_BRAND = (
-    (re.compile(r"\bMG\s*[345]\b", re.I), "MG"),
+# 车型 / 品牌名。不靠正文里单独的 "MG iSMART" 打品牌。
+# IM 必须大写，避免德文 “im”（在……里）。MG IM6 是 MG，不是 IM。
+_BODY_BRANDS = (
+    (re.compile(r"\bMG\s*IM\s*[0-9]\b", re.I), "MG"),
+    (re.compile(r"\bMG\s*[34568]\b", re.I), "MG"),
     (re.compile(r"\bMG4\b", re.I), "MG"),
+    (re.compile(r"\bMGS\s*[0-9]\b", re.I), "MG"),
     (re.compile(r"\bZS\s*EV\b", re.I), "MG"),
     (re.compile(r"\bMG\s*ZS\b", re.I), "MG"),
-    (re.compile(r"\bMG\s*HS\b", re.I), "MG"),
+    (re.compile(r"\bMG\s*(?:EHS|HS)\b", re.I), "MG"),
     (re.compile(r"\bMarvel\s*R\b", re.I), "MG"),
     (re.compile(r"\bCyberster\b", re.I), "MG"),
+    (re.compile(r"\bmaxus\b", re.I), "Maxus"),
+    (re.compile(r"\bLDV\b", re.I), "LDV"),
+    (re.compile(r"(?<![A-Za-z])IM(?:\s*[0-9]|\s+Motors)?\b"), "IM"),
 )
 
 # 不参与正文打分：补信息 / 关闭类，不是客户问题类型。
@@ -112,13 +122,67 @@ def canonicalize_issue_l2(name: str | None) -> Optional[str]:
     return _ISSUE_L2_TO_HUMAN.get(raw, raw)
 
 
+_KB_ISSUE_NAMES: frozenset[str] | None = None
+
+
+def knowledge_base_issue_names() -> frozenset[str]:
+    """最新全量知识库里的二级分类。坐席新加的类型不用再改代码名单。"""
+    global _KB_ISSUE_NAMES
+    if _KB_ISSUE_NAMES is not None:
+        return _KB_ISSUE_NAMES
+    names: set[str] = set()
+    try:
+        from openpyxl import load_workbook
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        files = sorted(
+            p for p in root.glob("iSMART自动回复知识库_全量模板_*.xlsx")
+            if not p.name.startswith("~$")
+        )
+        if not files:
+            _KB_ISSUE_NAMES = frozenset()
+            return _KB_ISSUE_NAMES
+        wb = load_workbook(files[-1], read_only=True, data_only=True)
+        if "分类字典" in wb.sheetnames:
+            for i, row in enumerate(wb["分类字典"].iter_rows(values_only=True)):
+                if i == 0 or not row or len(row) < 2 or not row[1]:
+                    continue
+                names.add(str(row[1]).strip())
+        sheet = wb[wb.sheetnames[0]]
+        l2_idx = 3
+        for i, row in enumerate(sheet.iter_rows(values_only=True)):
+            if i == 0:
+                header = [str(c or "").strip() for c in row]
+                if "二级问题分类" in header:
+                    l2_idx = header.index("二级问题分类")
+                continue
+            if not row or l2_idx >= len(row) or not row[l2_idx]:
+                continue
+            names.add(str(row[l2_idx]).strip())
+        wb.close()
+    except Exception:
+        names = set()
+    cleaned: set[str] = set()
+    for raw in names:
+        name = canonicalize_issue_l2(raw)
+        if not name or name in _SKIP_L2_SCORE or name.startswith("关闭"):
+            continue
+        cleaned.add(name)
+    _KB_ISSUE_NAMES = frozenset(cleaned)
+    return _KB_ISSUE_NAMES
+
+
 def _is_human_issue_tag(c: str) -> bool:
     t = (c or "").strip()
     if not t or t.startswith(ISSUE_PREFIX) or t.startswith("AUTO:"):
         return False
     if t.startswith(VIN_PREFIX) or t.startswith(BRAND_PREFIX):
         return False
-    return t in _HUMAN_ISSUE_L2 or t in _KNOWN_L2
+    if t in _HUMAN_ISSUE_L2 or t in _KNOWN_L2:
+        return True
+    folded = t.casefold()
+    return any(name.casefold() == folded for name in knowledge_base_issue_names())
 
 
 def human_issue_display_names(categories: list[str] | None) -> list[str]:
@@ -189,20 +253,33 @@ def extract_vin(body: str) -> Optional[str]:
     return vin
 
 
+def _canon_brand_token(raw: str) -> Optional[str]:
+    key = _field_value(raw).lower()
+    if not key:
+        return None
+    if key in _KNOWN_BRANDS:
+        return _KNOWN_BRANDS[key]
+    for alias, canon in sorted(_KNOWN_BRANDS.items(), key=lambda kv: len(kv[0]), reverse=True):
+        if len(alias) < 3:
+            continue
+        if alias in key:
+            return canon
+    token = key.split()[0]
+    if token in _KNOWN_BRANDS:
+        return _KNOWN_BRANDS[token]
+    return None
+
+
 def extract_brand(body: str) -> Optional[str]:
+    """品牌栏优先。栏是空的或认不出时，再看车型和 Maxus / LDV / IM / MG。"""
     if not body:
         return None
     m = _BRAND_FIELD_RE.search(body)
     if m:
-        raw = _field_value(m.group(1))
-        key = raw.lower()
-        if key in _KNOWN_BRANDS:
-            return _KNOWN_BRANDS[key]
-        for alias, canon in _KNOWN_BRANDS.items():
-            if alias in key or key.startswith(alias):
-                return canon
-        return None
-    for rx, brand in _MODEL_IMPLIES_BRAND:
+        hit = _canon_brand_token(m.group(1))
+        if hit:
+            return hit
+    for rx, brand in _BODY_BRANDS:
         if rx.search(body):
             return brand
     return None
@@ -216,7 +293,7 @@ def _latest_issue_text(text: str) -> str:
 
 
 _ISSUE_TAG_PICK_SYSTEM = """\
-You label one iSMART after-sales email with exactly one issue category.
+You label one iSMART after-sales email with its issue categories.
 Read the entire latest customer message, every sentence and the form Description.
 Do not stop at the first clause. Ignore the Issue Type dropdown, the privacy-policy
 footer, and quoted agent replies.
@@ -228,52 +305,83 @@ Home charging that fails while a public charger works through the charger's own 
 is 非iSMART-充电相关, even if the customer also says the app cannot talk to the car.
 A successful bind that then asks to contact the previous owner is App-绑车解绑相关,
 even if earlier sentences mention a token or the app not opening.
-Reply with one allowed name exactly, or empty when there is no concrete fault.
+When the message has two or three separate problems, list each one, in the order
+they appear, at most three. Do not drop the second problem because the first
+category does not cover every sentence. Do not split one problem into two
+categories because of a side clause. Use only allowed names, including new
+knowledge-base names. Reply with an empty list when there is no concrete fault.
 """
 
 _ISSUE_TAG_VERIFY_SYSTEM = """\
-You check a proposed issue category against the whole latest customer message.
-ok is true only when that category describes the whole problem, not one clause.
-ok is false when another sentence is the real problem. Example: do not accept
-App-车控车态相关 just because the app "cannot talk to the car" when the message
-is that home charging fails and public charging works. Do not accept
-App-绑车解绑相关 or App-软件更新 just because the customer already tried
-unbind/bind or reinstall. Do not accept FICM-Voice Service相关 for a greeting
-"Hello MG,".
-If ok is false, set category to the one allowed name that fits the whole message,
-or empty if none fits. If ok is true, repeat the proposed category.
+You check proposed issue categories against the whole latest customer message.
+ok is true when the list is exactly the distinct problems in that message:
+one category when there is one problem, or two or three when the customer
+asks about that many separate faults. ok is false when a name only matches
+a side clause, or when a second concrete fault has no category.
+Example: do not accept App-车控车态相关 just because the app "cannot talk to
+the car" when the message is that home charging fails and public charging works.
+Do not accept App-绑车解绑相关 or App-软件更新 just because the customer already
+tried unbind/bind or reinstall. Do not accept FICM-Voice Service相关 for a greeting
+"Hello MG,". Do not collapse two real faults into one name, and do not add a
+second name for a remark that is not its own fault.
+If ok is false, set categories to the allowed names that fit, or leave them
+empty if none fit. If ok is true, repeat the proposed categories.
 """
 
 
 def _allowed_issue_names() -> list[str]:
     names: set[str] = set()
-    for raw in _HUMAN_ISSUE_L2 | _KNOWN_L2:
+    for raw in _HUMAN_ISSUE_L2 | _KNOWN_L2 | knowledge_base_issue_names():
         name = canonicalize_issue_l2(raw)
-        if name and name not in _SKIP_L2_SCORE:
+        if name and name not in _SKIP_L2_SCORE and not name.startswith("关闭"):
             names.add(name)
-    return sorted(names)
+    folded: dict[str, str] = {}
+    for name in sorted(names):
+        key = name.casefold()
+        current = folded.get(key)
+        if current is None or name in _HUMAN_ISSUE_L2:
+            folded[key] = name
+    return sorted(folded.values())
 
 
 def _accept_issue_name(raw: str | None) -> Optional[str]:
     name = canonicalize_issue_l2(raw)
-    if not name or name in _SKIP_L2_SCORE:
+    if not name or name in _SKIP_L2_SCORE or name.startswith("关闭"):
         return None
-    if name not in set(_allowed_issue_names()):
-        return None
-    return name
+    folded = name.casefold()
+    chosen: Optional[str] = None
+    for allowed in _allowed_issue_names():
+        if allowed.casefold() != folded:
+            continue
+        if allowed in _HUMAN_ISSUE_L2 or chosen is None:
+            chosen = allowed
+    return chosen
 
 
-def semantic_issue_l2(text: str, llm) -> tuple[Optional[str], str]:
+def _names_from_tag_result(obj) -> list[str]:
+    found: list[str] = []
+    for raw in list(getattr(obj, "categories", None) or []):
+        name = _accept_issue_name(str(raw))
+        if name and name not in found:
+            found.append(name)
+    single = _accept_issue_name(getattr(obj, "category", ""))
+    if single and single not in found:
+        found.append(single)
+    return found[:3]
+
+
+def semantic_issue_l2(text: str, llm) -> tuple[list[str], str]:
     """读完整最新一段再定类，然后用同一段全文核对一遍。
 
-    返回 (分类或 None, 状态)。状态是 ok / none / failed。
-    failed 表示模型没叫通，调用方可以退回关键词。none 表示核对后没有能盖住全文的类。
+    返回 (分类列表, 状态)。一封信可以有 1 到 3 个分开的问题。
+    状态是 ok / none / failed。failed 表示模型没叫通，调用方可以退回关键词。
+    none 表示核对后没有能对上的类。
     """
     import logging
 
     latest = (text or "").strip()
     if not latest or llm is None:
-        return None, "failed"
+        return [], "failed"
     allowed = _allowed_issue_names()
     user = (
         "Allowed categories:\n"
@@ -295,7 +403,8 @@ def semantic_issue_l2(text: str, llm) -> tuple[Optional[str], str]:
             max_completion_tokens=2048,
             role="issue_tag",
         )
-        proposed = _accept_issue_name(getattr(picked, "category", ""))
+        proposed = _names_from_tag_result(picked)
+        shown = ", ".join(proposed) if proposed else "(none)"
         checked, _ = llm.invoke_json(
             schema=IssueTagVerify,
             messages=[
@@ -303,7 +412,7 @@ def semantic_issue_l2(text: str, llm) -> tuple[Optional[str], str]:
                 {
                     "role": "user",
                     "content": (
-                        f"Proposed category: {proposed or '(none)'}\n\n"
+                        f"Proposed categories: {shown}\n\n"
                         + user
                     ),
                 },
@@ -314,17 +423,17 @@ def semantic_issue_l2(text: str, llm) -> tuple[Optional[str], str]:
         )
     except Exception as e:
         log.warning("[issue_tag] LLM failed: %s", e)
-        return None, "failed"
+        return [], "failed"
     if not getattr(checked, "ok", False):
-        corrected = _accept_issue_name(getattr(checked, "category", ""))
+        corrected = _names_from_tag_result(checked)
         if corrected and corrected != proposed:
             log.info("[issue_tag] verify corrected %s -> %s", proposed, corrected)
             return corrected, "ok"
         log.info("[issue_tag] verify rejected %s", proposed)
-        return None, "none"
-    final = _accept_issue_name(getattr(checked, "category", "")) or proposed
+        return [], "none"
+    final = _names_from_tag_result(checked) or proposed
     if not final:
-        return None, "none"
+        return [], "none"
     return final, "ok"
 
 
@@ -815,12 +924,22 @@ def _apply_template_or_keyword_issue(
         facts["issue"] = None
 
 
-def _replace_ai_issue_tags(categories: list[str], issue: str | None) -> list[str]:
-    """只改 AI 的「问题:」。红标、VIN、品牌、AUTO: 留着。"""
+def _replace_ai_issue_tags(
+    categories: list[str],
+    issues: list[str] | str | None,
+) -> list[str]:
+    """只改 AI 的「问题:」。红标、VIN、品牌、AUTO: 留着。可以留 1 到 3 条。"""
     kept = [c for c in categories if not str(c).startswith("问题:")]
-    name = (issue or "").strip()
-    if name:
-        kept.append(f"问题:{name}")
+    if isinstance(issues, str) or issues is None:
+        names = [issues] if issues else []
+    else:
+        names = list(issues)
+    seen = set(kept)
+    for issue in names:
+        tag = issue_tag(issue or "")
+        if tag and tag not in seen:
+            kept.append(tag)
+            seen.add(tag)
     return kept
 
 
@@ -868,7 +987,7 @@ def push_fact_tags(
     facts = extract_mail_facts(body, thread_context, extra_text)
     extracted = canonicalize_issue_l2(facts.get("issue"))
     reds = human_issue_display_names(existing)
-    replace_issue = False
+    replace_issues: list[str] | None = None
     skip_issue = _skip_issue_classification(existing, classify_issue)
     if skip_issue:
         facts["issue"] = None
@@ -880,13 +999,13 @@ def push_fact_tags(
         latest = _latest_issue_text(blob)
         if extra_text and extra_text.strip():
             latest = (latest + "\n" + extra_text.strip()[:1500]).strip()
-        cat, status = semantic_issue_l2(latest, llm)
-        if status == "ok" and cat:
-            facts["issue"] = cat
-            replace_issue = True
-        elif status == "none":
+        picked, status = semantic_issue_l2(latest, llm)
+        if status == "ok" and picked:
             facts["issue"] = None
-            replace_issue = True
+            replace_issues = picked
+        elif status in {"ok", "none"}:
+            facts["issue"] = None
+            replace_issues = []
         else:
             _apply_template_or_keyword_issue(facts, issue_l2, extracted)
     else:
@@ -894,8 +1013,8 @@ def push_fact_tags(
     merged, actions = merge_fact_tags(existing, facts)
     if not skip_issue and reds:
         merged = align_issue_tags_to_red(merged)
-    elif not skip_issue and replace_issue:
-        merged = _replace_ai_issue_tags(merged, facts.get("issue"))
+    elif not skip_issue and replace_issues is not None:
+        merged = _replace_ai_issue_tags(merged, replace_issues)
     if merged == existing:
         return {
             "applied": False,

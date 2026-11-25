@@ -849,11 +849,13 @@ Rules:
   Do not pick STATUS-003 just because they also cannot connect the App.
   Every iSMART web form appends “I can read the latest Privacy Notice…”
   — ignore that footer for intent and template pick.
+- Maxus, LDV, IM, and iSMART are all our apps. “App von Maxus verbinden ging nicht” / LDV or IM app will not connect is STATUS-003 (same as iSMART cannot connect). Do not pick UNSUP-001 or MODEL-001 just because the app is named Maxus, LDV, or IM. UNSUP-001 is only when the vehicle is not ours / not in the backend, and they are not talking about these apps.
 - Web-form Issue Type / Problem Type (e.g. Vehicle Management) is a dropdown, not the customer ask. BIND-007 is where to find Vehicle Management / multiple cars / delete a vehicle / unbind then rebind. Spanish “no puedo desvincular… volver a vincular” is BIND-007, not BIND-001 (previous-owner 72h). “Doesn't connect to the app” with VIN is STATUS-003, not BIND-007, not REG-001 from the country line alone.
 - App toast “The network is not available. Please try again later.” (or 网络不可用 / netwerk niet beschikbaar) after they cannot use iSMART — including a new car — is STATUS-003 (open area + restart HU + dealer network diagnosis). Not BIND-008 (“please try again” without a QR), not GEN-005, not REG-001 from Country/Region: Netherlands. Binding QR + “The service is not available” in an unsupported market stays region/bind, not this toast.
 - Car stuck on 3G / reactivate iSMART plan / complimentary data expiry: no template (PLAN-001 and NET-PLAN-001 retired) → human. Do not pick NET-001 hotspot/month-start.
 - Fraudulent / unauthorized / hacked account still bound to the vehicle, and the customer asks CS to force-unbind / disconnect that account (e.g. Romanian “conectată fraudulos” + “deconectarea contului”) → human. No auto draft. Do not pick GEN-001 (already has VIN/ID) or BIND-001 (previous-owner 72h how-to). Previous-owner unbind without fraud stays BIND-001; self unbind/rebind stays BIND-007; secondary-account CS unlink stays ACC-009.
 - “Maintenance history” / “service history” / service records is SVC-001: we cannot query history by email → local dealer with VIN. Do not answer remaining service mileage/days or current service-plan reminder wording.
+- Where to find the maintenance intervals, or the schedule is not in the manual or the App, is SVC-001: iSMART cannot provide the intervals; contact local MG after-sales or the selling dealer. Not NON-005 (function availability / User Manual / may not be supported) and not MAN-001.
 - Engine emissions fault warning (dashboard/IPK) is NON-004. If the customer did not say the warning is from the App, never write “warning shown in the App”. Prefer dealer function check + roadside if unsafe.
 - “App / application not responding” is STATUS-003 (open area + restart HU + refresh App). Not GEN-004 screenshot ask.
 - Remote lock/unlock or vehicle-status screen stuck in “update mode”, or the Unlock icon keeps spinning / “open command still running”, is STATUS-003 even with no VIN. Not GEN-002 (ask for VIN only), not FOTA-001, not MAP-002.
@@ -901,7 +903,12 @@ Rules:
   is human. "Doesn't connect to the app" with a real fault stays STATUS-003.
   Keys left in the boot, car locked, App cannot unlock is NON-007. Keys
   locked inside and the customer is stranded stays KEY-002. Didn't get a
-  code to connect the vehicle is ACC-004 (PIN), not the bind PDF. Another
+  code to connect the vehicle is ACC-004 (PIN), not the bind PDF. Asking
+  for a security code, or where to find the PIN, while binding a car
+  (including a second-hand car) is also ACC-004. Not BIND-001
+  (previous-owner 72h) and not the bind PDF. Verification code, SMS code,
+  and error code stay out of ACC-004. Previous-owner unbind with no
+  security-code question stays BIND-001. Another
   vehicle not registered, or changed car and how to update the app, is
   BIND-007, not ACC-008. QR too small / can't scan the QR is BIND-008; if
   the same mail also has an SOS e-call that clears, add a dealer check for

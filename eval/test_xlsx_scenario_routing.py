@@ -3078,6 +3078,88 @@ def test_review1026_wrong_template_family():
     print("  ✓ 10-26 审稿错行已锁")
 
 
+def test_maintenance_interval_dealer_not_feature():
+    """问保养周期在哪 → SVC-001 引导经销商。不是功能是否支持，也不是要手册。"""
+    templates = load_xlsx()
+    body = (
+        "Country/Region: Germany\n"
+        "Brand: MG\n"
+        "Vehicle Model: MG4 Electric\n"
+        "Type of problem: My vehicle\n"
+        "Description of the problems: Where can I find the maintenance "
+        "intervals of the MG 4? Unfortunately, I didn't find anything in "
+        "the manual. Nor in the app."
+    )
+    chosen = pick_template("", templates, body_text=body, use_llm=False)
+    assert chosen.get("template_id") == "SVC-001", chosen.get("template_id")
+    text = (chosen.get("template") or "").lower()
+    assert "maintenance intervals" in text
+    assert "after-sales" in text or "dealership" in text
+    assert "may not be supported" not in text
+    assert "operation method" not in text
+    assert "非iSMART-售前售后" in (chosen.get("category") or "")
+
+    history = (
+        "Description of problems: Would you have the maintenance history "
+        "of this vehicle?"
+    )
+    chosen = pick_template("", templates, body_text=history, use_llm=False)
+    assert chosen.get("template_id") == "SVC-001", chosen.get("template_id")
+    hist = (chosen.get("template") or "").lower()
+    assert "service history" in hist or "maintenance or service history" in hist
+    assert "maintenance intervals" not in hist
+
+    manual = (
+        "In the iSmart app, the manual for the MG4 EV is not listed when you "
+        "filter for vehicle manuals in Europe for 2026."
+    )
+    chosen = pick_template("ismart_feature_inquiry", templates, body_text=manual, use_llm=False)
+    assert chosen.get("template_id") == "MAN-001", chosen.get("template_id")
+    assert "maintenance intervals" not in (chosen.get("template") or "").lower()
+    print("  ✓ 保养周期 → SVC-001 经销商，不是 NON-005")
+
+
+def test_security_code_while_binding_is_pin():
+    """二手车绑车时问 security code → ACC-004。不是前车主 72 小时，也不是绑车 PDF。"""
+    templates = load_xlsx()
+    body = (
+        "Country/Region: United Kingdom\n"
+        "Issue Type: Login & Logout\n"
+        "Description of Issues: Got a second hand MG4\n"
+        "Trying to bind car to app\n"
+        "Asking for a security code.\n"
+        "Where do I find this?"
+    )
+    chosen = pick_template("", templates, body_text=body, use_llm=False)
+    assert chosen.get("template_id") == "ACC-004", chosen.get("template_id")
+    text = (chosen.get("template") or "").lower()
+    assert "security settings" in text
+    assert "pin code" in text
+    assert "72" not in text
+    assert "driving licence" not in text
+
+    owner = "The vehicle is already bound to a previous owner."
+    chosen = pick_template("app_binding", templates, body_text=owner, use_llm=False)
+    assert chosen.get("template_id") == "BIND-001", chosen.get("template_id")
+
+    second_hand_only = (
+        "Got a second hand MG4. Trying to bind the car to the app."
+    )
+    chosen = pick_template("", templates, body_text=second_hand_only, use_llm=False)
+    assert chosen.get("template_id") != "ACC-004", chosen.get("template_id")
+
+    missed = "I didn't get a code to connect the vehicle to the MG app."
+    chosen = pick_template("", templates, body_text=missed, use_llm=False)
+    assert chosen.get("template_id") == "ACC-004", chosen.get("template_id")
+
+    verify = "The app asks for a verification code. I never received the SMS."
+    chosen = pick_template("", templates, body_text=verify, use_llm=False)
+    assert chosen is None or chosen.get("template_id") != "ACC-004", (
+        chosen.get("template_id") if chosen else None
+    )
+    print("  ✓ security code → ACC-004，不是 BIND-001")
+
+
 # ── runner ───────────────────────────────────────────────────────────
 
 TESTS = [
@@ -3402,6 +3484,10 @@ TESTS = [
      test_review_lock_network_unavailable_not_bind008),
     ("F109 10-26 审稿错行",
      test_review1026_wrong_template_family),
+    ("F110 保养周期 → SVC-001 经销商，不是功能说明",
+     test_maintenance_interval_dealer_not_feature),
+    ("F111 security code → ACC-004，不是前车主解绑",
+     test_security_code_while_binding_is_pin),
 ]
 
 

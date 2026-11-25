@@ -45,6 +45,11 @@ def test_extract_brand_from_field():
 def test_extract_brand_from_model_not_ismart_footer():
     assert extract_brand("Please contact iSMART Service Team") is None
     assert extract_brand("I bought an MG4 Electric last month") == "MG"
+    assert extract_brand("Mit App von maxus verbinden ging nicht") == "Maxus"
+    assert extract_brand("Brand:\nThe LDV app will not connect") == "LDV"
+    assert extract_brand("Vehicle model: IM6 100kWh") == "IM"
+    assert extract_brand("Vehicle Model: MG IM6") == "MG"
+    assert extract_brand("Mit der App im Auto verbinden ging nicht") is None
 
 
 def test_extract_issue_charging():
@@ -523,13 +528,13 @@ def test_semantic_issue_l2_keeps_verified_name():
         {"category": "App-绑车解绑相关"},
         {"ok": True, "category": "App-绑车解绑相关", "reason": "whole ask"},
     ])
-    cat, status = semantic_issue_l2(
+    names, status = semantic_issue_l2(
         "Bind is successful. I now need to contact the previous owner. "
         "I have always owned this car from new.",
         llm,
     )
     assert status == "ok"
-    assert cat == "App-绑车解绑相关"
+    assert names == ["App-绑车解绑相关"]
     assert llm.calls == 2
     g = _G(["问题:App-账号管理相关", "AUTO:FICM-网络"])
     llm2 = _ScriptedLlm([
@@ -547,6 +552,40 @@ def test_semantic_issue_l2_keeps_verified_name():
     assert "问题:App-绑车解绑相关" in g.cats
     assert "问题:App-账号管理相关" not in g.cats
     assert "AUTO:FICM-网络" in g.cats
+
+
+def test_semantic_issue_keeps_two_categories():
+    llm = _ScriptedLlm([
+        {"categories": ["App-绑车解绑相关", "FICM-CPAA相关"]},
+        {"ok": True, "categories": ["App-绑车解绑相关", "FICM-CPAA相关"], "reason": "two asks"},
+    ])
+    g = _G(["品牌:MG"])
+    rec = push_fact_tags(
+        g, "m1",
+        "I cannot bind the vehicle. CarPlay also disconnects every few minutes.",
+        llm=llm,
+    )
+    assert rec["applied"] is True
+    assert "问题:App-绑车解绑相关" in g.cats
+    assert "问题:FICM-CPAA相关" in g.cats
+    assert "品牌:MG" in g.cats
+
+
+def test_new_knowledge_base_issue_name_is_allowed():
+    from agent.mail_tags import knowledge_base_issue_names
+    assert "新需求-App-远控车窗" in knowledge_base_issue_names()
+    llm = _ScriptedLlm([
+        {"category": "新需求-App-远控车窗"},
+        {"ok": True, "category": "新需求-App-远控车窗", "reason": "window remote"},
+    ])
+    g = _G(["新需求-App-远控车窗"])
+    rec = push_fact_tags(
+        g, "m1", "Please add remote window control in the app.", llm=llm,
+    )
+    assert rec["applied"] is True
+    assert llm.calls == 0
+    assert "问题:新需求-App-远控车窗" in g.cats
+    assert "新需求-App-远控车窗" in g.cats
 
 
 TESTS = [
@@ -588,6 +627,8 @@ TESTS = [
     ("模型失败才退回模板类别", test_semantic_tag_falls_back_when_llm_fails),
     ("有红标不再用模型改", test_semantic_tag_does_not_override_red),
     ("核对通过才留下问题标", test_semantic_issue_l2_keeps_verified_name),
+    ("一封信两个问题都留下", test_semantic_issue_keeps_two_categories),
+    ("知识库新类型可以当红标", test_new_knowledge_base_issue_name_is_allowed),
     ("关闭-无效邮件不再做问题分类", test_closed_invalid_skips_issue_classification),
     ("试过的步骤不抢主诉", test_tried_steps_do_not_steal_the_issue),
 ]

@@ -1354,6 +1354,20 @@ _MAINTENANCE_HISTORY_RE = re.compile(
     r")",
     re.I,
 )
+# 问保养周期在哪，不是保养记录，也不是功能是否支持。
+_MAINT_INTERVAL_RE = re.compile(
+    r"("
+    r"maintenance\s+intervals?"
+    r"|service\s+intervals?"
+    r"|wartungsintervall\w*"
+    r"|where.{0,60}(find|see|look).{0,40}maintenance(?!\s+(history|record))"
+    r"|(didn'?t|did\s+not|cannot|can'?t|unable|not).{0,40}"
+    r"find.{0,40}maintenance(?!\s+(history|record))"
+    r"|maintenance(?!\s+(history|record)).{0,48}"
+    r"(not\s+in|nothing\s+in|didn'?t\s+find).{0,24}(manual|app|handbook)"
+    r")",
+    re.I | re.S,
+)
 _ENGINE_EMISSION_WARN_RE = re.compile(
     r"("
     r"engine\s+emissions?\s+(fault\s+)?warning|"
@@ -1905,6 +1919,8 @@ def _is_bound_but_remote_fail(text: str) -> bool:
 
 def _is_previous_owner_bind(text: str) -> bool:
     blob = text or ""
+    if _is_connect_pin_code(blob):
+        return False
     if _is_forgot_password(blob) and re.search(
         r"still\s+(me|myself|the\s+customer)|i\s+am\s+still\s+the",
         blob,
@@ -1991,6 +2007,8 @@ def _is_manual_find_request(text: str) -> bool:
         return False
     if _is_manual_wrong_model(blob):
         return False
+    if _is_maintenance_interval_ask(blob):
+        return False
     return bool(_MANUAL_FIND_RE.search(blob))
 
 
@@ -2019,6 +2037,14 @@ def _is_maintenance_history_ask(text: str) -> bool:
     """要保养/维修历史记录，不是剩余保养里程/天数或当前服务计划。"""
     blob = f"{_webform_score_text(text or '')}\n{_form_issue_description(text or '')}"
     return bool(_MAINTENANCE_HISTORY_RE.search(blob))
+
+
+def _is_maintenance_interval_ask(text: str) -> bool:
+    """问保养周期在哪。手册和 App 里没有，也不是功能是否支持。"""
+    if _is_maintenance_history_ask(text or ""):
+        return False
+    blob = f"{_webform_score_text(text or '')}\n{_form_issue_description(text or '')}"
+    return bool(_MAINT_INTERVAL_RE.search(blob))
 
 
 def _is_engine_emission_ipk(text: str) -> bool:
@@ -2159,6 +2185,8 @@ def _is_explicit_region_unsupported(text: str) -> bool:
 def _is_bind_ask_before_region_confirm(text: str) -> bool:
     """绑不上/找不到二维码/用 VIN 注册：人工确认不支持前，先按绑车要信息。"""
     blob = f"{_webform_score_text(text or '')}\n{_form_issue_description(text or '')}"
+    if _is_connect_pin_code(blob):
+        return False
     if _is_explicit_region_unsupported(blob):
         return False
     if _is_qr_unreadable(blob):
@@ -2206,6 +2234,19 @@ _MAINT_HISTORY_TEMPLATE = """\
 Thank you for your email.
 
 Unfortunately, we are unable to access, query, or provide your vehicle's maintenance or service history by email. We kindly recommend that you contact your local MG dealer directly, as they can check the vehicle records using the VIN and provide you with the relevant information.
+
+Best regards,
+iSMART Service Team
+"""
+
+_MAINT_INTERVAL_TEMPLATE = """\
+{{salutation}},
+
+Thank you for your email.
+
+Regarding maintenance intervals, we are unable to provide this information through iSMART. Please contact your local MG after-sales service or the dealership where you purchased your vehicle. They can advise you on the recommended maintenance schedule.
+
+We apologize for any inconvenience caused.
 
 Best regards,
 iSMART Service Team
@@ -2392,6 +2433,10 @@ def _specialize_template_for_ask(
     tid = str(tmpl.get("template_id") or "")
     latest = _latest_customer_turn(body_text)
     out = dict(tmpl)
+    if tid == "SVC-001" and _is_maintenance_interval_ask(latest or body_text):
+        out["template"] = _MAINT_INTERVAL_TEMPLATE
+        out["category"] = "非iSMART-售前售后服务"
+        return out
     if tid == "SVC-001" and _is_maintenance_history_ask(latest or body_text):
         out["template"] = _MAINT_HISTORY_TEMPLATE
         return out
@@ -2473,6 +2518,8 @@ def _specialize_template_for_ask(
 
 def _is_app_bind_howto(text: str) -> bool:
     blob = text or ""
+    if _is_connect_pin_code(blob):
+        return False
     if _is_qr_unreadable(blob):
         return False
     # 绑失败/绑不上是要信息或故障排查，不是「怎么绑」教程
@@ -2506,6 +2553,47 @@ def _is_self_unbind_rebind(text: str) -> bool:
     if _is_sold_delete_account(blob) or _is_bind_another_vehicle(blob):
         return False
     return bool(_SELF_UNBIND_REBIND_RE.search(blob) or _is_vehicle_mgmt_howto(text))
+
+
+# Maxus / LDV / IM 和 iSMART 都是自家 App。德文 “im App” 是「在 App 里」，不要当成 IM。
+_OUR_APP_NAME_RE = re.compile(r"\b(?:maxus|ldv)\b", re.I)
+_IM_APP_RE = re.compile(
+    r"(?<![A-Za-z])IM(?=\s*[- ]?(?:app|application)\b)"
+    r"|(?:app|application)\s+IM(?![A-Za-z0-9])",
+)
+_OUR_APP_CONNECT_RE = re.compile(
+    r"("
+    r"verbinden\s+ging\s+nicht"
+    r"|nicht\s+verbinden"
+    r"|kann\s+nicht\s+verbinden"
+    r"|verbind(?:en|ung).{0,48}(nicht|ging|fehl)"
+    r"|(cannot|can'?t|unable|doesn'?t|does\s+not|won'?t|failed).{0,48}connect"
+    r"|connect(?:ion|ing)?.{0,40}(fail|not\s+work|didn'?t|does\s+not|won'?t)"
+    r"|连不上|无法连接|连接失败"
+    r")",
+    re.I | re.S,
+)
+
+
+def _names_our_connected_app(text: str) -> bool:
+    """正文点了自家联网 App：Maxus、LDV，或写成 IM App。不含德文 im App。"""
+    blob = text or ""
+    return bool(_OUR_APP_NAME_RE.search(blob) or _IM_APP_RE.search(blob))
+
+
+def _is_our_app_connect_fault(text: str) -> bool:
+    """用自家 App（Maxus / LDV / IM）连不上。不是「不是我们的车」。"""
+    hay = _webform_score_text(text or "")
+    desc = _form_issue_description(text or "")
+    blob = f"{hay}\n{desc}"
+    if not _names_our_connected_app(blob):
+        return False
+    if _is_app_bind_howto(blob):
+        return False
+    return bool(
+        _OUR_APP_CONNECT_RE.search(blob)
+        or _APP_CAR_CONNECT_FAULT_RE.search(blob)
+    )
 
 
 def _is_app_car_connect_fault(text: str) -> bool:
@@ -3616,14 +3704,26 @@ def _is_key_left_in_boot(text: str) -> bool:
 
 
 def _is_connect_pin_code(text: str) -> bool:
-    """绑车时没收到 PIN。验证码和 error code 不算。"""
+    """绑车时问 security code / PIN 在哪，或没收到用来连车的 PIN。验证码和 error code 不算。"""
     blob = text or ""
+    if _is_vehicle_hotspot_password(blob):
+        return False
     if re.search(
         r"verification\s+code|error\s*code|code\s*47|sms\s+code|one[\s-]?time",
         blob,
         re.I,
     ):
         return False
+    if re.search(
+        r"("
+        r"security\s+code"
+        r"|\bpin\s+code\b"
+        r"|(where|find|asking|asked).{0,48}(\bpin\b|passcode)"
+        r")",
+        blob,
+        re.I | re.S,
+    ):
+        return True
     return bool(re.search(
         r"("
         r"(didn'?t|did\s+not|don'?t|do\s+not|never|not|no).{0,24}"
@@ -3923,7 +4023,8 @@ def _review_lock(latest: str) -> tuple[Optional[str], frozenset[str]]:
          frozenset({"GEN-002", "KEY-002", "STATUS-003", "APP-GUIDE-001"})),
         (_is_connect_pin_code(blob), "ACC-004",
          frozenset({
-             "APP-GUIDE-001", "BIND-003", "BIND-001", "GEN-002", "ACC-003",
+             "APP-GUIDE-001", "BIND-003", "BIND-001", "BIND-007",
+             "GEN-002", "ACC-003",
          })),
         (_is_vehicle_status_stale(blob), "STATUS-003",
          frozenset({"GEN-002", "GEN-004", "FOTA-001", "APP-GUIDE-001"})),
@@ -3953,6 +4054,10 @@ def _review_lock(latest: str) -> tuple[Optional[str], frozenset[str]]:
          frozenset({"GEN-002", "MAN-001"})),
         (_is_manual_wrong_model(blob), "MAN-001",
          frozenset({"GEN-002", "GEN-001", "MAN-002", "CHG-001"})),
+        (_is_maintenance_interval_ask(blob), "SVC-001",
+         frozenset({
+             "NON-005", "MAN-001", "MAN-002", "DK-003", "GEN-002",
+         })),
         (_is_manual_find_request(blob), "MAN-001",
          frozenset({"GEN-002"})),
         (_is_address_change_request(blob), "ACC-006",
@@ -5192,6 +5297,8 @@ def _rule_semantic_mismatch(latest: str, template_id: str) -> Optional[str]:
         return "privacy-notice row vs web-form footer / other ask"
     if tid == "BIND-008" and _is_network_unavailable_toast(blob):
         return "QR-unreadable row vs network-unavailable toast"
+    if tid == "BIND-001" and _is_connect_pin_code(blob):
+        return "previous-owner 72h row vs security-code PIN"
     if tid == "BIND-001" and _is_self_unbind_rebind(blob):
         return "previous-owner 72h row vs self unbind/rebind"
     if tid in {"GEN-001", "GEN-002", "BIND-001", "BIND-007"} and fraud_force_unbind_needs_human(blob):
@@ -5206,6 +5313,8 @@ def _rule_semantic_mismatch(latest: str, template_id: str) -> Optional[str]:
         return "unsupported-region row vs app-car connect fault"
     if tid == "REG-001" and _is_bind_ask_before_region_confirm(blob):
         return "unsupported-region row vs bind/QR ask before human confirm"
+    if tid == "APP-GUIDE-001" and _is_connect_pin_code(blob):
+        return "bind-tutorial row vs security-code PIN"
     if tid == "APP-GUIDE-001" and _is_bind_ask_before_region_confirm(blob):
         return "bind-tutorial row vs bind failure / ask-info"
     if tid in {"CHG-001", "CHG-002"} and (
@@ -5214,11 +5323,15 @@ def _rule_semantic_mismatch(latest: str, template_id: str) -> Optional[str]:
         return "non-iSMART charging row vs app charging-management ask"
     if tid == "STATUS-013" and _is_app_blocks_charging(blob):
         return "charge-target row vs app-blocks-charging"
+    if tid == "MAN-001" and _is_maintenance_interval_ask(blob):
+        return "user-manual row vs maintenance interval"
     if tid == "MAN-001" and _is_bind_ask_before_region_confirm(blob):
         return "user-manual row vs bind/QR ask"
     if tid == "STATUS-001" and parked_false_awake_needs_human(blob):
         return "stale-app-data row vs parked false-ignition / 12V drain"
     if tid == "NON-005":
+        if _is_maintenance_interval_ask(blob):
+            return "feature-availability row vs maintenance interval"
         if _HAIL_INSURANCE_RE.search(blob):
             return "user-manual row vs hail/insurance ask"
         if _POWERTRAIN_ASK_RE.search(blob):

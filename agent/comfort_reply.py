@@ -140,18 +140,43 @@ def latest_customer_id(
     return str(turns[-1].get("id") or "") or fallback
 
 
+def comfort_only_without_business_draft(
+    thread_msgs: list[dict] | None,
+    self_emails: set[str],
+    current_id: str,
+) -> bool:
+    """只发过安抚、还没有业务草稿。这种再扫仍要起草。"""
+    own = {e.casefold() for e in self_emails if e}
+    ours: list[dict] = []
+    business_draft = False
+    for msg in thread_msgs or []:
+        if str(msg.get("id") or "") == str(current_id or ""):
+            continue
+        body = msg.get("body_text") or ""
+        if msg.get("is_draft"):
+            if not is_comfort_reply(body):
+                business_draft = True
+            continue
+        sender = (msg.get("sender_email") or "").casefold()
+        if sender in own:
+            ours.append(msg)
+    if not ours or business_draft:
+        return False
+    return all(is_comfort_reply(m.get("body_text") or "") for m in ours)
+
+
 def comfort_tag_target(
     thread_msgs: list[dict] | None,
     *,
     comfort_at: str,
     self_emails: set[str],
 ) -> str | None:
-    """安抚信之前最近的一封客户来信。没有更早的，就用线程里任一封客户来信。"""
+    """安抚打在这封安抚信之前最早的一封客户来信上。没有更早的，就用线程里最早的一封。"""
     turns = _customer_turns(thread_msgs, self_emails, None)
     if not turns:
         return None
     cutoff = comfort_at or "9999"
     before = [m for m in turns if (m.get("received_at") or "") <= cutoff]
     pool = before or turns
-    mid = str(pool[-1].get("id") or "")
+    mid = str(pool[0].get("id") or "")
     return mid or None
